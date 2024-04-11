@@ -1,5 +1,6 @@
 import ttkbootstrap as ttk
 from app.main_window import MainWindow
+import app.main_window.__init__ as __init__
 
 def main():
     root = ttk.Window(themename="darkly")
@@ -9,4 +10,4 @@ def main():
     root.mainloop()
 
 if __name__ == "__main__":
-    main()
+    app.main()
