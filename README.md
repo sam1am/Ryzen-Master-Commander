@@ -59,9 +59,6 @@ The application will prompt you for your sudo password, which is required for co
 
 That's it! You're now ready to use Ryzen Master Commander to monitor and control your Ryzen-based system. Enjoy! 😊
 
-You can add this Quick Start guide to your README.md file to provide users with a concise set of instructions to get up and running with Ryzen Master Commander quickly. Feel free to adjust the wording or formatting as needed to fit the style of your README.
-
-
 ### Installing from Source
 
 To install Ryzen Master Commander from source, follow these steps:
