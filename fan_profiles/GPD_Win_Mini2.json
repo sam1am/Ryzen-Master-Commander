@@ -3,7 +3,7 @@
   "Author": "sam1am",
   "EcPollInterval": 5000,
   "ReadWriteWords": false,
-  "CriticalTemperature": 85,
+  "CriticalTemperature": 95,
   "FanConfigurations": [
     {
       "ReadRegister": 122,
@@ -20,27 +20,22 @@
           "FanSpeed": 0.0
         },
         {
-          "UpThreshold": 45,
+          "UpThreshold": 55,
           "DownThreshold": 30,
           "FanSpeed": 30.0
         },
         {
-          "UpThreshold": 60,
-          "DownThreshold": 45,
-          "FanSpeed": 40.0
-        },
-        {
           "UpThreshold": 70,
-          "DownThreshold": 60,
-          "FanSpeed": 80.0
+          "DownThreshold": 55,
+          "FanSpeed": 40.0
         },
         {
           "UpThreshold": 80,
           "DownThreshold": 70,
-          "FanSpeed": 100.0
+          "FanSpeed": 60.0
         },
         {
-          "UpThreshold": 85,
+          "UpThreshold": 95,
           "DownThreshold": 80,
           "FanSpeed": 100.0
         }
