@@ -1,0 +1,52 @@
+{
+  "NotebookModel": "GPD Win Mini_s",
+  "Author": "sam1am",
+  "EcPollInterval": 5000,
+  "ReadWriteWords": false,
+  "CriticalTemperature": 85,
+  "FanConfigurations": [
+    {
+      "ReadRegister": 122,
+      "WriteRegister": 122,
+      "MinSpeedValue": 1,
+      "MaxSpeedValue": 244,
+      "ResetRequired": true,
+      "FanSpeedResetValue": 0,
+      "FanDisplayName": "Fan",
+      "TemperatureThresholds": [
+        {
+          "UpThreshold": 30,
+          "DownThreshold": 0,
+          "FanSpeed": 0.0
+        },
+        {
+          "UpThreshold": 45,
+          "DownThreshold": 30,
+          "FanSpeed": 30.0
+        },
+        {
+          "UpThreshold": 60,
+          "DownThreshold": 45,
+          "FanSpeed": 40.0
+        },
+        {
+          "UpThreshold": 70,
+          "DownThreshold": 60,
+          "FanSpeed": 80.0
+        },
+        {
+          "UpThreshold": 80,
+          "DownThreshold": 70,
+          "FanSpeed": 100.0
+        },
+        {
+          "UpThreshold": 85,
+          "DownThreshold": 80,
+          "FanSpeed": 100.0
+        }
+      ],
+      "FanSpeedPercentageOverrides": []
+    }
+  ],
+  "RegisterWriteConfigurations": []
+}
