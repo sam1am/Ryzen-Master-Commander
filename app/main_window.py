@@ -2,9 +2,6 @@ import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter.simpledialog import askstring
 import sys
-# import json
-# import os
-# from json.decoder import JSONDecodeError
 import subprocess
 from app.graphs import TemperatureGraph, FanSpeedGraph
 from app.system_utils import get_system_readings, apply_tdp_settings
