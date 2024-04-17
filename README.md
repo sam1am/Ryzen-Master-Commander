@@ -24,7 +24,9 @@ Make sure you have the following dependencies installed on your system:
 
 - Python 3.6 or higher 🐍
 - TCL and Tk libraries 🖼️
-- `nbfc` and `ryzenadj` command-line tools 🔧
+- `nbfc-linux` and `ryzenadj` command-line tools 🔧 from the following projects: 
+  - https://github.com/nbfc-linux/nbfc-linux
+  - https://github.com/FlyGoat/RyzenAdj
 
 #### Installing Dependencies on Arch Linux
 
@@ -34,10 +36,9 @@ sudo pacman -S python tcl tk nbfc ryzenadj
 
 #### Installing Dependencies on Debian-based Systems (Ubuntu, Debian, etc.)
 
-```
-sudo apt update
-sudo apt install python3 python3-pip tcl tk nbfc ryzenadj
-```
+Install tkinter: `sudo apt install python3-tk`
+
+Follow the instructions for your linux distribution on the respective project package page above to install nbfc-linux and ryzenadj.
 
 ### Installation
 
@@ -111,4 +112,4 @@ This project is licensed under the [Apache License 2.0](LICENSE).
 
 ## Acknowledgements 🙏
 
-Ryzen Master Commander was developed on Arch Linux for the GPD Win Mini, but it should work on other Ryzen-based devices as well. Special thanks to the developers of the `nbfc` and `ryzenadj` tools, which make this application possible. 👏
+Ryzen Master Commander was developed on Arch Linux for the GPD Win Mini, but it should work on other Ryzen-based devices as well. Special thanks to the developers of the `nbfc-linux` and `ryzenadj` tools, which make this application possible. 👏

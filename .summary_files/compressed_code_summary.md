@@ -18,6 +18,7 @@ Output of tree command:
     |-- main_ui.png
     |-- profile_saver.png
     |-- ui_w_graph.png
+|-- install_fan_profile.sh
 |-- main.py
 |-- manifest.in
 |-- requirements.txt

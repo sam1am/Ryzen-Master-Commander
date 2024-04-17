@@ -26,10 +26,10 @@ def apply_tdp_settings(current_profile, sudo_password):
                 command.extend([f'--{key}={value * 1000}'])
             elif key not in ["name", "max_performance", "power_saving"]:
                 command.extend([f'--{key}={value}'])
-        if current_profile.get("max_performance"):
-            command.append("--max-performance")
-        elif current_profile.get("power_saving"):
+        if current_profile.get("power_saving"):
             command.append("--power-saving")
+        elif current_profile.get("max_performance"):
+            command.append("--max-performance")
         try:
             subprocess.run(command, input=sudo_password + '\n', text=True)
         except subprocess.CalledProcessError as e:
