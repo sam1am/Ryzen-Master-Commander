@@ -1,6 +1,7 @@
 import ttkbootstrap as ttk
 from app.main_window import MainWindow
-import app.main_window.__init__ as __init__
+import app.main_window
+import app.__init__ as __init__
 
 def main():
     root = ttk.Window(themename="darkly")
