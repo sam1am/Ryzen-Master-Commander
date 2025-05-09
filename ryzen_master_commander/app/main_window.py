@@ -18,8 +18,11 @@ class MainWindow:
         self.profile_manager = ProfileManager(self.root)
         self.fan_speed_adjustment_delay = None
 
+        self.control_mode_var = ttk.StringVar(value='auto')
+
         # Create widgets in the provided root window
         self.create_widgets()
+        self.set_auto_control()
         # Delay the first reading to allow window to appear
         self.root.after(1000, self.update_readings)
 
@@ -58,6 +61,10 @@ class MainWindow:
         self.temp_label = ttk.Label(content_frame, text="Temperature: ")
         self.temp_label.pack(pady=5)
 
+        # Curent profile label
+        self.current_profile_label = ttk.Label(content_frame, text="Current Profile: ")
+        self.current_profile_label.pack(pady=5)
+
         # Create fan speed label
         self.fan_speed_label = ttk.Label(content_frame, text="Fan Speed: ")
         self.fan_speed_label.pack(pady=5)
@@ -94,9 +101,13 @@ class MainWindow:
 
         control_mode_frame = ttk.Frame(center_frame)
         control_mode_frame.pack(pady=5)
-        self.radio_auto_control = ttk.Radiobutton(control_mode_frame, text='Auto Control', value='auto', variable='control_mode', command=self.set_auto_control)
+        self.radio_auto_control = ttk.Radiobutton(control_mode_frame, text='Auto Control', 
+                                                value='auto', variable=self.control_mode_var, 
+                                                command=self.set_auto_control)
         self.radio_auto_control.grid(row=0, column=0, padx=5)
-        self.radio_manual_control = ttk.Radiobutton(control_mode_frame, text='Manual Control', value='manual', variable='control_mode', command=self.set_manual_control)
+        self.radio_manual_control = ttk.Radiobutton(control_mode_frame, text='Manual Control', 
+                                                value='manual', variable=self.control_mode_var, 
+                                                command=self.set_manual_control)
         self.radio_manual_control.grid(row=0, column=1, padx=5)
 
         # Create TDP controls
@@ -110,11 +121,14 @@ class MainWindow:
         # self.setup_system_tray()
 
     def update_readings(self):
-        temperature, fan_speed = get_system_readings()
+        temperature, fan_speed, current_profile = get_system_readings()
+        
         self.temp_label.config(text=f"Temperature: {temperature} °C")
         self.fan_speed_label.config(text=f"Fan Speed: {fan_speed}%")
         self.temperature_graph.update_temperature(temperature)
         self.fan_speed_graph.update_fan_speed(fan_speed)
+        self.current_profile_label.config(text=f"Current Profile: {current_profile}")
+
         refresh_seconds = int(self.refresh_slider.get())
         self.root.after(refresh_seconds * 1000, self.update_readings)
 

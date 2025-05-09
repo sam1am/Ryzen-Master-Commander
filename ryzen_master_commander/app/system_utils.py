@@ -14,10 +14,12 @@ def get_system_readings():
 
     temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
     fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
+    current_profile_match = re.search(r'Selected Config Name\s+:\s+(.*?)$', output, re.MULTILINE)
 
     temperature = temperature_match.group(1) if temperature_match else "n/a"
     fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
-    return temperature, fan_speed
+    current_profile = current_profile_match.group(1) if current_profile_match else "n/a"
+    return temperature, fan_speed, current_profile
 
 def apply_tdp_settings(current_profile):
     if current_profile:
