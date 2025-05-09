@@ -12,16 +12,15 @@ def get_system_readings():
         return "n/a", "n/a"
 
     temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
-    fan_speed_match = re.search(r'Current fan speed\s+:\s+(\d+\.?\d*)', output)
+    fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
 
     temperature = temperature_match.group(1) if temperature_match else "n/a"
     fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
     return temperature, fan_speed
 
 def apply_tdp_settings(current_profile):
-    # Remove sudo_password parameter
     if current_profile:
-        command = ['pkexec', 'ryzenadj']  # Use pkexec instead of sudo
+        command = ['pkexec', 'ryzenadj']
         for key, value in current_profile.items():
             if key in ["fast-limit", "slow-limit"]:
                 command.extend([f'--{key}={value * 1000}'])
@@ -34,6 +33,6 @@ def apply_tdp_settings(current_profile):
         elif current_profile.get("max_performance"):
             command.append("--max-performance")
         try:
-            subprocess.run(command)  # No input needed with pkexec
+            subprocess.run(command)
         except subprocess.CalledProcessError as e:
             print(f"Error applying TDP settings: {e}")

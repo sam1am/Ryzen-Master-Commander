@@ -27,4 +27,7 @@ package() {
   
   # Install license if you have one
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+  
+  # Explicitly install polkit policy with correct permissions
+  install -Dm644 polkit/com.merrythieves.ryzenadj.policy "$pkgdir/usr/share/polkit-1/actions/com.merrythieves.ryzenadj.policy"
 }

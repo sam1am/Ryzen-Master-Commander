@@ -6,9 +6,21 @@ class TemperatureGraph:
     def __init__(self, root):
         self.root = root
         self.temperature_readings = []
+        
+        # Set matplotlib to not use its own window
+        import matplotlib
+        matplotlib.use('TkAgg')
+        
+        # Create figure with proper embedding settings
         self.fig, self.ax = plt.subplots(figsize=(6, 1.5))
+        self.fig.patch.set_facecolor('none')  # Transparent background
+        
+        # Create canvas and explicitly set master
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack()
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+        
+        self.canvas.draw()
+        plt.close(self.fig)  # Close the figure manager but keep the canvas
 
     def update_temperature(self, temperature):
         if temperature != "n/a":

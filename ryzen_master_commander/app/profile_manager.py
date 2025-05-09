@@ -7,10 +7,21 @@ import os
 class ProfileManager:
     def __init__(self, root):
         self.root = root
-        self.profiles_directory = "./tdp_profiles"
+        
+        # Check multiple potential profile directories
+        potential_dirs = [
+            "./tdp_profiles",  # Development location
+            "/usr/share/ryzen-master-commander/tdp_profiles",  # System-wide installation
+            os.path.expanduser("~/.local/share/ryzen-master-commander/tdp_profiles")  # User installation
+        ]
+        
+        # Use the first directory that exists
+        self.profiles_directory = next((d for d in potential_dirs if os.path.exists(d)), "./tdp_profiles")
+        print(f"Using profiles from: {self.profiles_directory}")
+        
         self.current_profile = None
-
         self.load_profiles()
+
 
     def create_widgets(self, content_frame):
         profile_frame = ttk.Frame(content_frame)

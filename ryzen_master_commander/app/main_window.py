@@ -1,20 +1,23 @@
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter.simpledialog import askstring
-import sys
+import os
 import subprocess
 from ryzen_master_commander.app.graphs import TemperatureGraph, FanSpeedGraph
-from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
+from ryzen_master_commander.app.system_utils import get_system_readings
 from ryzen_master_commander.app.profile_manager import ProfileManager
 
 class MainWindow:
     def __init__(self, root):
         self.root = root
+        
+        # The rest of your initialization code
         self.graph_visible = True
         self.graph_frame = None
         self.profile_manager = ProfileManager(self.root)
         self.fan_speed_adjustment_delay = None
 
+        # Create widgets in the provided root window
         self.create_widgets()
         # Delay the first reading to allow window to appear
         self.root.after(1000, self.update_readings)
@@ -145,13 +148,30 @@ class MainWindow:
     #         frame.pack()
 
     def toggle_graph(self):
+        # Get current window dimensions
+        current_width = self.root.winfo_width()
+        current_height = self.root.winfo_height()
+        
         if self.graph_visible:
+            # Hide graph
             self.graph_frame.pack_forget()
             self.graph_button.config(text="Show Graph")
+            # Reduce window height by 300 pixels
+            new_height = max(950, current_height - 300)  # Ensure minimum height of 950
+            self.root.geometry(f"{current_width}x{new_height}")
         else:
+            # Show graph
             self.graph_frame.pack(side=ttk.TOP, fill=ttk.BOTH, expand=True)
             self.graph_button.config(text="Hide Graph")
+            # Increase window height by 300 pixels
+            new_height = current_height + 300
+            self.root.geometry(f"{current_width}x{new_height}")
+        
         self.graph_visible = not self.graph_visible
+        
+        # Center the window after resizing
+        # self.center_window_after_resize()
+
     
     def setup_system_tray(self):
         """Set up system tray icon for Linux desktop environments"""

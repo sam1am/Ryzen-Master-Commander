@@ -1,21 +1,56 @@
 import ttkbootstrap as ttk
 from ryzen_master_commander.app.main_window import MainWindow
-import time
+import os
+from ryzen_master_commander.singleton import SingleInstance
+# import matplotlib
+# matplotlib.use('TkAgg')
+
+_singleton = None
 
 def main():
+    global _singleton
+    
+    # Create the singleton at the very beginning of main
+    # This will exit the program if another instance is already running
+    _singleton = SingleInstance("ryzen-master-commander")
+    
+    # The rest of your main function continues as normal
     theme = detect_system_theme()
     root = ttk.Window(themename=theme)
     root.title("Ryzen Master and Commander")
+
     root.geometry("500x950")
     
-    # Center the window on the screen
+    # Set the window icon immediately
+    try:
+        icon_paths = [
+            "/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+            "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+            "./img/icon.png"
+        ]
+        
+        for path in icon_paths:
+            if os.path.exists(path):
+                from PIL import Image, ImageTk
+                icon = ImageTk.PhotoImage(Image.open(path))
+                root.iconphoto(False, icon)  # Changed to False to not affect future windows
+                break
+                
+        # Set window class for KDE
+        root.tk.call('wm', 'class', root._w, "ryzen-master-commander")
+    except Exception as e:
+        print(f"Error setting application icon: {e}")
+    
+    # Center window first, before adding any content
     center_window(root, 500, 950)
     
+    # Ensure the window is visible and drawn before creating MainWindow
+    root.update_idletasks()
+    
+    # Now create the main window using our already configured root
     app = MainWindow(root)
     
-    # Use after method to ensure window visibility after initialization
-    root.after(100, lambda: ensure_window_visible(root))
-    
+    # Start the main loop with the fully configured window
     root.mainloop()
 
 def center_window(window, width, height):

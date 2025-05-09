@@ -6,27 +6,27 @@
   <vendor>Ryzen Master Commander</vendor>
   <vendor_url>https://github.com/sam1am/Ryzen-Master-Commander</vendor_url>
 
-  <action id="org.yourusername.ryzenadj">
+  <action id="com.merrythieves.ryzenadj">
     <description>Run ryzenadj with elevated privileges</description>
     <message>Authentication is required to change processor settings</message>
     <icon_name>cpu</icon_name>
     <defaults>
       <allow_any>auth_admin_keep</allow_any>
       <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
+      <allow_active>yes</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/ryzenadj</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
   
-  <action id="org.yourusername.nbfc">
+  <action id="com.merrythieves.nbfc">
     <description>Run nbfc with elevated privileges</description>
     <message>Authentication is required to control fan settings</message>
     <icon_name>fan</icon_name>
     <defaults>
       <allow_any>auth_admin_keep</allow_any>
       <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
+      <allow_active>yes</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/nbfc</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>

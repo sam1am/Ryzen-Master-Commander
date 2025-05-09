@@ -2,10 +2,11 @@
 Name=Ryzen Master Commander
 Comment=AMD Ryzen TDP and Fan Control
 GenericName=Hardware Control
-Exec=ryzen-master-commander
-Icon=/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png
+Exec=ryzen-master-commander %U
+Icon=ryzen-master-commander
 Terminal=false
 Type=Application
 Categories=System;Settings;HardwareSettings;
 Keywords=AMD;Ryzen;TDP;Fan;Control;
 StartupNotify=true
+StartupWMClass=ryzen-master-commander

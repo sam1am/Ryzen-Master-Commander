@@ -1,5 +1,3 @@
-#!/usr/bin/env python3
-
 from setuptools import setup, find_packages
 import os
 
@@ -11,6 +9,7 @@ fan_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/fan_pro
 tdp_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/tdp_profiles')
 
 # Create data files structure properly
+# Add this to your data_files list in setup.py
 data_files = [
     ('share/applications', [os.path.join(BASE_DIR, 'share/applications/ryzen-master-commander.desktop')]),
     ('share/ryzen-master-commander/fan_profiles', 
@@ -19,6 +18,8 @@ data_files = [
      [os.path.join(tdp_profiles_path, file) for file in os.listdir(tdp_profiles_path) if os.path.isfile(os.path.join(tdp_profiles_path, file))]),
     ('bin', [os.path.join(BASE_DIR, 'bin/ryzen-master-commander'), 
              os.path.join(BASE_DIR, 'bin/ryzen-master-commander-helper')]),
+    # Add this line for the polkit policy
+    ('share/polkit-1/actions', [os.path.join(BASE_DIR, 'polkit/com.merrythieves.ryzenadj.policy')]),
 ]
 
 # Add icon files
