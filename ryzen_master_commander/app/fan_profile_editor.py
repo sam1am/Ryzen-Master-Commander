@@ -111,10 +111,10 @@ class FanProfileEditor:
         system_profiles = glob.glob(os.path.join(self.nbfc_configs_dir, "*.json"))
         
         # Check user profiles
-        user_profiles = glob.glob(os.path.join(self.user_configs_dir, "*.json"))
+        # user_profiles = glob.glob(os.path.join(self.user_configs_dir, "*.json"))
         
         # Combine and extract names
-        all_profiles = system_profiles + user_profiles
+        all_profiles = system_profiles
         profile_names = [os.path.splitext(os.path.basename(p))[0] for p in all_profiles]
         
         return sorted(profile_names)
