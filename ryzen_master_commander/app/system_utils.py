@@ -1,5 +1,6 @@
 import subprocess
 import re
+import json
 
 def get_system_readings():
     try:
@@ -36,3 +37,13 @@ def apply_tdp_settings(current_profile):
             subprocess.run(command)
         except subprocess.CalledProcessError as e:
             print(f"Error applying TDP settings: {e}")
+
+def apply_fan_profile(profile_name):
+    """Apply a fan profile by name with nbfc command"""
+    try:
+        # Use the profile name (without extension) with nbfc config command
+        profile_name = os.path.splitext(os.path.basename(profile_name))[0]
+        subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True)
+        return True, f"Fan profile '{profile_name}' applied successfully"
+    except Exception as e:
+        return False, f"Error applying fan profile: {str(e)}"

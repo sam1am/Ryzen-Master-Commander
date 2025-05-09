@@ -6,6 +6,7 @@ import subprocess
 from ryzen_master_commander.app.graphs import TemperatureGraph, FanSpeedGraph
 from ryzen_master_commander.app.system_utils import get_system_readings
 from ryzen_master_commander.app.profile_manager import ProfileManager
+from ryzen_master_commander.app.fan_profile_editor import FanProfileEditor
 
 class MainWindow:
     def __init__(self, root):
@@ -73,6 +74,9 @@ class MainWindow:
         fan_controls_label = ttk.Label(center_frame, text="Fan Controls", font=("Helvetica", 14, "bold"))
         fan_controls_label.pack(pady=5)
 
+        fan_profile_editor_btn = ttk.Button(center_frame, text="Fan Profile Editor", command=self.open_fan_profile_editor)
+        fan_profile_editor_btn.pack(pady=10)
+
         refresh_label = ttk.Label(center_frame, text="Refresh Interval (seconds): ")
         refresh_label.pack(pady=5)
         self.refresh_slider = ttk.Scale(center_frame, from_=1, to_=30, orient='horizontal', length=300)
@@ -126,6 +130,25 @@ class MainWindow:
             self.manual_control_value_label.config(text=f"{slider_value}%")
         except subprocess.CalledProcessError as e:
             print(f"Error setting fan speed: {e}")
+
+    def open_fan_profile_editor(self):
+        # Create a new top-level window
+        editor_window = ttk.Toplevel(self.root)
+        editor_window.title("Fan Profile Editor")
+        editor_window.geometry("700x700")
+        editor_window.transient(self.root)  # Make it transient to main window
+        
+        # Center the window
+        window_width = 700
+        window_height = 700
+        screen_width = editor_window.winfo_screenwidth()
+        screen_height = editor_window.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        editor_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Create the fan profile editor
+        editor = FanProfileEditor(editor_window)
 
 
     def set_auto_control(self):
