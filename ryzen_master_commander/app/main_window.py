@@ -53,10 +53,6 @@ class MainWindow:
         # Create fan speed graph
         self.fan_speed_graph = FanSpeedGraph(self.graph_frame)
 
-        # Create a button to toggle graph visibility
-        self.graph_button = ttk.Button(content_frame, text="Show Graph", command=self.toggle_graph)
-        self.graph_button.pack(pady=5)
-
         # Create temperature label
         self.temp_label = ttk.Label(content_frame, text="Temperature: ")
         self.temp_label.pack(pady=5)
@@ -109,6 +105,10 @@ class MainWindow:
                                                 value='manual', variable=self.control_mode_var, 
                                                 command=self.set_manual_control)
         self.radio_manual_control.grid(row=0, column=1, padx=5)
+
+        # Create a button to toggle graph visibility
+        self.graph_button = ttk.Button(content_frame, text="Show Graph", command=self.toggle_graph)
+        self.graph_button.pack(pady=5)
 
         # Create TDP controls
         separator = ttk.Separator(center_frame, orient='horizontal')
