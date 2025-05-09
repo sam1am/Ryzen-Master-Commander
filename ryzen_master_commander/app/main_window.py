@@ -122,7 +122,7 @@ class MainWindow:
 
     def update_readings(self):
         temperature, fan_speed, current_profile = get_system_readings()
-        
+
         self.temp_label.config(text=f"Temperature: {temperature} °C")
         self.fan_speed_label.config(text=f"Fan Speed: {fan_speed}%")
         self.temperature_graph.update_temperature(temperature)

@@ -1,6 +1,6 @@
 import subprocess
 import re
-import json
+import os
 
 def get_system_readings():
     try:

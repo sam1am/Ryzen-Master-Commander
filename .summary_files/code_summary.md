@@ -29,6 +29,7 @@ Project Structure:
     |-- __init__.py
     |-- app
         |-- __init__.py
+        |-- fan_profile_editor.py
         |-- graphs.py
         |-- main_window.py
         |-- profile_manager.py
@@ -148,6 +149,7 @@ import subprocess
 from ryzen_master_commander.app.graphs import TemperatureGraph, FanSpeedGraph
 from ryzen_master_commander.app.system_utils import get_system_readings
 from ryzen_master_commander.app.profile_manager import ProfileManager
+from ryzen_master_commander.app.fan_profile_editor import FanProfileEditor
 
 class MainWindow:
     def __init__(self, root):
@@ -159,8 +161,11 @@ class MainWindow:
         self.profile_manager = ProfileManager(self.root)
         self.fan_speed_adjustment_delay = None
 
+        self.control_mode_var = ttk.StringVar(value='auto')
+
         # Create widgets in the provided root window
         self.create_widgets()
+        self.set_auto_control()
         # Delay the first reading to allow window to appear
         self.root.after(1000, self.update_readings)
 
@@ -199,6 +204,10 @@ class MainWindow:
         self.temp_label = ttk.Label(content_frame, text="Temperature: ")
         self.temp_label.pack(pady=5)
 
+        # Curent profile label
+        self.current_profile_label = ttk.Label(content_frame, text="Current Profile: ")
+        self.current_profile_label.pack(pady=5)
+
         # Create fan speed label
         self.fan_speed_label = ttk.Label(content_frame, text="Fan Speed: ")
         self.fan_speed_label.pack(pady=5)
@@ -214,6 +223,9 @@ class MainWindow:
         # Create fan controls
         fan_controls_label = ttk.Label(center_frame, text="Fan Controls", font=("Helvetica", 14, "bold"))
         fan_controls_label.pack(pady=5)
+
+        fan_profile_editor_btn = ttk.Button(center_frame, text="Fan Profile Editor", command=self.open_fan_profile_editor)
+        fan_profile_editor_btn.pack(pady=10)
 
         refresh_label = ttk.Label(center_frame, text="Refresh Interval (seconds): ")
         refresh_label.pack(pady=5)
@@ -232,9 +244,13 @@ class MainWindow:
 
         control_mode_frame = ttk.Frame(center_frame)
         control_mode_frame.pack(pady=5)
-        self.radio_auto_control = ttk.Radiobutton(control_mode_frame, text='Auto Control', value='auto', variable='control_mode', command=self.set_auto_control)
+        self.radio_auto_control = ttk.Radiobutton(control_mode_frame, text='Auto Control', 
+                                                value='auto', variable=self.control_mode_var, 
+                                                command=self.set_auto_control)
         self.radio_auto_control.grid(row=0, column=0, padx=5)
-        self.radio_manual_control = ttk.Radiobutton(control_mode_frame, text='Manual Control', value='manual', variable='control_mode', command=self.set_manual_control)
+        self.radio_manual_control = ttk.Radiobutton(control_mode_frame, text='Manual Control', 
+                                                value='manual', variable=self.control_mode_var, 
+                                                command=self.set_manual_control)
         self.radio_manual_control.grid(row=0, column=1, padx=5)
 
         # Create TDP controls
@@ -248,11 +264,14 @@ class MainWindow:
         # self.setup_system_tray()
 
     def update_readings(self):
-        temperature, fan_speed = get_system_readings()
+        temperature, fan_speed, current_profile = get_system_readings()
+        
         self.temp_label.config(text=f"Temperature: {temperature} °C")
         self.fan_speed_label.config(text=f"Fan Speed: {fan_speed}%")
         self.temperature_graph.update_temperature(temperature)
         self.fan_speed_graph.update_fan_speed(fan_speed)
+        self.current_profile_label.config(text=f"Current Profile: {current_profile}")
+
         refresh_seconds = int(self.refresh_slider.get())
         self.root.after(refresh_seconds * 1000, self.update_readings)
 
@@ -268,6 +287,25 @@ class MainWindow:
             self.manual_control_value_label.config(text=f"{slider_value}%")
         except subprocess.CalledProcessError as e:
             print(f"Error setting fan speed: {e}")
+
+    def open_fan_profile_editor(self):
+        # Create a new top-level window
+        editor_window = ttk.Toplevel(self.root)
+        editor_window.title("Fan Profile Editor")
+        editor_window.geometry("700x700")
+        editor_window.transient(self.root)  # Make it transient to main window
+        
+        # Center the window
+        window_width = 700
+        window_height = 700
+        screen_width = editor_window.winfo_screenwidth()
+        screen_height = editor_window.winfo_screenheight()
+        x = (screen_width - window_width) // 2
+        y = (screen_height - window_height) // 2
+        editor_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
+        
+        # Create the fan profile editor
+        editor = FanProfileEditor(editor_window)
 
 
     def set_auto_control(self):
@@ -529,6 +567,7 @@ class ProfileManager:
 ```py
 import subprocess
 import re
+import json
 
 def get_system_readings():
     try:
@@ -542,10 +581,12 @@ def get_system_readings():
 
     temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
     fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
+    current_profile_match = re.search(r'Selected Config Name\s+:\s+(.*?)$', output, re.MULTILINE)
 
     temperature = temperature_match.group(1) if temperature_match else "n/a"
     fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
-    return temperature, fan_speed
+    current_profile = current_profile_match.group(1) if current_profile_match else "n/a"
+    return temperature, fan_speed, current_profile
 
 def apply_tdp_settings(current_profile):
     if current_profile:
@@ -566,6 +607,15 @@ def apply_tdp_settings(current_profile):
         except subprocess.CalledProcessError as e:
             print(f"Error applying TDP settings: {e}")
 
+def apply_fan_profile(profile_name):
+    """Apply a fan profile by name with nbfc command"""
+    try:
+        # Use the profile name (without extension) with nbfc config command
+        profile_name = os.path.splitext(os.path.basename(profile_name))[0]
+        subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True)
+        return True, f"Fan profile '{profile_name}' applied successfully"
+    except Exception as e:
+        return False, f"Error applying fan profile: {str(e)}"
 ```
 ---
 ## File: ryzen_master_commander/main.py
