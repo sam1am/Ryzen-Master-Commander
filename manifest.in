@@ -1,2 +1,6 @@
-include README.md
-include LICENSE
+include LICENSE README.md requirements.txt
+recursive-include ryzen_master_commander *.py
+recursive-include share *
+recursive-include bin *
+recursive-include polkit *
+recursive-include img *

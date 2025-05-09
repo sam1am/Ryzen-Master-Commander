@@ -1,0 +1,18 @@
+#!/bin/bash
+# Helper script to run commands with elevated privileges
+
+command="$1"
+shift
+
+case "$command" in
+  "ryzenadj")
+    pkexec /usr/bin/ryzenadj "$@"
+    ;;
+  "nbfc")
+    pkexec /usr/bin/nbfc "$@"
+    ;;
+  *)
+    echo "Unknown command: $command"
+    exit 1
+    ;;
+esac

@@ -1,134 +1,59 @@
+#!/usr/bin/env python3
+
 from setuptools import setup, find_packages
+import os
+
+# Get the absolute path to the directory where setup.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Define proper paths based on setup.py location
+fan_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/fan_profiles')
+tdp_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/tdp_profiles')
+
+# Create data files structure properly
+data_files = [
+    ('share/applications', [os.path.join(BASE_DIR, 'share/applications/ryzen-master-commander.desktop')]),
+    ('share/ryzen-master-commander/fan_profiles', 
+     [os.path.join(fan_profiles_path, file) for file in os.listdir(fan_profiles_path) if os.path.isfile(os.path.join(fan_profiles_path, file))]),
+    ('share/ryzen-master-commander/tdp_profiles', 
+     [os.path.join(tdp_profiles_path, file) for file in os.listdir(tdp_profiles_path) if os.path.isfile(os.path.join(tdp_profiles_path, file))]),
+    ('bin', [os.path.join(BASE_DIR, 'bin/ryzen-master-commander'), 
+             os.path.join(BASE_DIR, 'bin/ryzen-master-commander-helper')]),
+]
+
+# Add icon files
+for size in ['16x16', '32x32', '64x64', '128x128']:
+    icon_dir = os.path.join(BASE_DIR, f'share/icons/hicolor/{size}/apps')
+    if os.path.exists(icon_dir):
+        data_files.append((f'share/icons/hicolor/{size}/apps', 
+                          [os.path.join(icon_dir, 'ryzen-master-commander.png')]))
 
 setup(
-    name='ryzen-master-commander',
-    version='0.1.7',
-    packages=find_packages(),
-    install_requires=[
-        'matplotlib',
-        'ttkbootstrap',
+    name="ryzen-master-commander",
+    version="1.0.0",
+    author="sam1am",
+    author_email="noreply@merrythieves.com",
+    description="TDP and fan control for AMD Ryzen processors",
+    url="https://github.com/sam1am/Ryzen-Master-Commander",
+    packages=['ryzen_master_commander', 'ryzen_master_commander.app'],
+    include_package_data=True,
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX :: Linux",
     ],
+    install_requires=[
+        "ttkbootstrap",
+        "matplotlib",
+        "numpy",
+        "Pillow",
+        "pystray",
+    ],
+    python_requires=">=3.6",
+    data_files=data_files,
     entry_points={
         'console_scripts': [
-            'ryzen-master-commander = app:main',
+            'ryzen-master-commander=ryzen_master_commander.main:main',
         ],
     },
-    long_description="""# Ryzen Master & Commander 🚀
-
-Ryzen Master & Commander is a Python-based GUI application for monitoring and controlling Ryzen-based systems, with a focus on the GPD Win Mini. It provides features such as temperature and fan speed monitoring, fan control, and TDP (Thermal Design Power) settings management. 🌡️💨🔧
-
-![Main UI](img/main_ui.png)
-*The main user interface of Ryzen Master Commander*
-
-## Features ✨
-
-- Real-time temperature and fan speed monitoring with graphs 📈
-- Manual and automatic fan speed control 🌬️
-- TDP settings management with customizable profiles ⚙️
-- User-friendly GUI built with ttkbootstrap 🎨
-
-Here's a Quick Start guide that you can add to your README.md file:
-
-## Quick Start 🚀
-
-To get started with Ryzen Master Commander quickly, follow these steps:
-
-### Prerequisites
-
-Make sure you have the following dependencies installed on your system:
-
-- Python 3.6 or higher 🐍
-- TCL and Tk libraries 🖼️
-- `nbfc-linux` and `ryzenadj` command-line tools 🔧 from the following projects: 
-  - https://github.com/nbfc-linux/nbfc-linux
-  - https://github.com/FlyGoat/RyzenAdj
-
-#### Installing Dependencies on Arch Linux
-
-```
-sudo pacman -S python tcl tk nbfc ryzenadj
-```
-
-#### Installing Dependencies on Debian-based Systems (Ubuntu, Debian, etc.)
-
-Install tkinter: `sudo apt install python3-tk`
-
-Follow the instructions for your linux distribution on the respective project package page above to install nbfc-linux and ryzenadj.
-
-### Installation
-
-Install Ryzen Master Commander using pip:
-
-```
-pip install ryzen-master-commander
-```
-
-### Running the Application
-
-Launch Ryzen Master Commander by running the following command:
-
-```
-ryzen-master-commander
-```
-
-The application will prompt you for your sudo password, which is required for controlling the fan speed and applying TDP settings. 🔑
-
-That's it! You're now ready to use Ryzen Master Commander to monitor and control your Ryzen-based system. Enjoy! 😊
-
-### Installing from Source
-
-To install Ryzen Master Commander from source, follow these steps:
-
-1. Clone the repository:
-
-```
-git clone https://github.com/sam1am/Ryzen-Master-Commander.git
-```
-
-2. Navigate to the project directory:
-
-```
-cd Ryzen-Master-Commander
-```
-
-3. Install the required Python packages:
-
-```
-pip install -e .
-```
-
-This command installs the package in editable mode, allowing you to make changes to the source code and have them immediately reflected in the installed package. 🎉
-
-## Usage 🚀
-
-To launch Ryzen Master Commander, run the following command:
-
-```
-ryzen-master-commander
-```
-
-The application will prompt you for your sudo password, which is required for controlling the fan speed and applying TDP settings. 🔑
-
-## Screenshots 📷
-
-![Profile Saver](img/profile_saver.png)
-*Saving a custom TDP profile*
-
-![UI with Graph](img/ui_w_graph.png)
-*Real-time temperature and fan speed monitoring with graphs*
-
-## Contributing 🤝
-
-Contributions to Ryzen Master Commander are welcome! If you find a bug, have a feature request, or want to contribute code, please open an issue or submit a pull request on the [GitHub repository](https://github.com/yourusername/Ryzen-Master-Commander). 😊
-
-## License 📜
-
-This project is licensed under the [Apache License 2.0](LICENSE).
-
-## Acknowledgements 🙏
-
-Ryzen Master Commander was developed on Arch Linux for the GPD Win Mini, but it should work on other Ryzen-based devices as well. Special thanks to the developers of the `nbfc-linux` and `ryzenadj` tools, which make this application possible. 👏
-""",
-    long_description_content_type="text/markdown",
-    description='A GUI application for monitoring and controlling fan and tdp settings on Ryzen-based systems.',
 )

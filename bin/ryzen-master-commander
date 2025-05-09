@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+# Launcher script for Ryzen Master Commander
+
+# Detect shell and use appropriate syntax
+if [ -n "$FISH_VERSION" ]; then
+    # Fish shell
+    python -m ryzen_master_commander.main $argv
+else
+    # Bash, Zsh, etc.
+    python -m ryzen_master_commander.main "$@"
+fi

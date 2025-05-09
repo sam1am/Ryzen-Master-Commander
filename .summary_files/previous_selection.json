@@ -1,1 +1,11 @@
-["./setup.py", "./main.py", "./requirements.txt", "./README.md", "./app/graphs.py", "./app/main_window.py", "./app/profile_manager.py", "./app/system_utils.py"]
+[
+    "/home/sam/github/Ryzen-Master-Commander/polkit/com.merrythieves.ryzenadj.policy",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/__init__.py",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/app/__init__.py",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/app/graphs.py",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/app/main_window.py",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/app/profile_manager.py",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/app/system_utils.py",
+    "/home/sam/github/Ryzen-Master-Commander/ryzen_master_commander/main.py",
+    "/home/sam/github/Ryzen-Master-Commander/share/applications/ryzen-master-commander.desktop"
+]

@@ -1,0 +1,1 @@
+{"name": "WinMini-max_battery", "fast-limit": 10, "slow-limit": 4, "slow-time": 30, "tctl-temp": 80, "apu-skin-temp": 40, "max-performance": false, "power-saving": true}

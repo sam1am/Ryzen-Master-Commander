@@ -1,2 +1,5 @@
-matplotlib
 ttkbootstrap
+matplotlib
+numpy
+Pillow
+pystray
