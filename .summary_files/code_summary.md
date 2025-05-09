@@ -11,99 +11,8 @@ Project Structure:
 |-- builds
     |-- ryzen-master-commander
         |-- PKGBUILD
-        |-- pkg
-            |-- ryzen-master-commander
-                |-- .BUILDINFO
-                |-- .MTREE
-                |-- .PKGINFO
-                |-- usr
-                    |-- bin
-                        |-- ryzen-master-commander
-                        |-- ryzen-master-commander-helper
-                    |-- share
-                        |-- applications
-                            |-- ryzen-master-commander.desktop
-                        |-- icons
-                            |-- hicolor
-                                |-- 128x128
-                                    |-- apps
-                                        |-- ryzen-master-commander.png
-                                |-- 16x16
-                                    |-- apps
-                                        |-- ryzen-master-commander.png
-                                |-- 32x32
-                                    |-- apps
-                                        |-- ryzen-master-commander.png
-                                |-- 64x64
-                                    |-- apps
-                                        |-- ryzen-master-commander.png
-                        |-- licenses
-                            |-- ryzen-master-commander
-                                |-- LICENSE
-                        |-- ryzen-master-commander
-                            |-- fan_profiles
-                                |-- GPD_Win_Mini2.json
-                            |-- tdp_profiles
-                                |-- WinMini-Balanced.json
-                                |-- WinMini-BatterySaver.json
-                                |-- WinMini-MaxPerformance.json
         |-- ryzen-master-commander-1.0.0-1-any.pkg.tar.zst
         |-- ryzen-master-commander-1.0.0.tar.gz
-        |-- src
-            |-- ryzen-master-commander-1.0.0
-                |-- .gitignore
-                |-- LICENSE
-                |-- README.md
-                |-- bin
-                    |-- ryzen-master-commander
-                    |-- ryzen-master-commander-helper
-                |-- img
-                    |-- icon.png
-                    |-- main_ui.png
-                    |-- profile_saver.png
-                    |-- ui_w_graph.png
-                |-- install_fan_profile.sh
-                |-- manifest.in
-                |-- polkit
-                    |-- com.merrythieves.ryzenadj.policy
-                |-- rebuild_install.sh
-                |-- requirements.txt
-                |-- ryzen_master_commander
-                    |-- __init__.py
-                    |-- app
-                        |-- __init__.py
-                        |-- graphs.py
-                        |-- main_window.py
-                        |-- profile_manager.py
-                        |-- system_utils.py
-                    |-- main.py
-                |-- setup.py
-                |-- share
-                    |-- applications
-                        |-- ryzen-master-commander.desktop
-                    |-- icons
-                        |-- hicolor
-                            |-- 128x128
-                                |-- apps
-                                    |-- ryzen-master-commander.png
-                            |-- 16x16
-                                |-- apps
-                                    |-- ryzen-master-commander.png
-                            |-- 32x32
-                                |-- apps
-                                    |-- ryzen-master-commander.png
-                            |-- 64x64
-                                |-- apps
-                                    |-- ryzen-master-commander.png
-                    |-- ryzen-master-commander
-                        |-- fan_profiles
-                            |-- GPD_Win_Mini2.json
-                        |-- tdp_profiles
-                            |-- WinMini-Balanced.json
-                            |-- WinMini-BatterySaver.json
-                            |-- WinMini-MaxPerformance.json
-                |-- tdp_profiles
-            |-- ryzen-master-commander-1.0.0.tar.gz
         |-- tdp_profiles
 |-- img
     |-- icon.png
@@ -125,6 +34,7 @@ Project Structure:
         |-- profile_manager.py
         |-- system_utils.py
     |-- main.py
+    |-- singleton.py
 |-- setup.py
 |-- share
     |-- applications
@@ -150,49 +60,9 @@ Project Structure:
             |-- WinMini-Balanced.json
             |-- WinMini-BatterySaver.json
             |-- WinMini-MaxPerformance.json
-|-- tdp_profiles
 
 ```
 
----
-## File: polkit/com.merrythieves.ryzenadj.policy
-
-```policy
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE policyconfig PUBLIC
- "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
- "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
-<policyconfig>
-  <vendor>Ryzen Master Commander</vendor>
-  <vendor_url>https://github.com/sam1am/Ryzen-Master-Commander</vendor_url>
-
-  <action id="org.yourusername.ryzenadj">
-    <description>Run ryzenadj with elevated privileges</description>
-    <message>Authentication is required to change processor settings</message>
-    <icon_name>cpu</icon_name>
-    <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/ryzenadj</annotate>
-    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
-  </action>
-  
-  <action id="org.yourusername.nbfc">
-    <description>Run nbfc with elevated privileges</description>
-    <message>Authentication is required to control fan settings</message>
-    <icon_name>fan</icon_name>
-    <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>auth_admin_keep</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/nbfc</annotate>
-    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
-  </action>
-</policyconfig>
-```
 ---
 ## File: ryzen_master_commander/__init__.py
 
@@ -217,9 +87,21 @@ class TemperatureGraph:
     def __init__(self, root):
         self.root = root
         self.temperature_readings = []
+        
+        # Set matplotlib to not use its own window
+        import matplotlib
+        matplotlib.use('TkAgg')
+        
+        # Create figure with proper embedding settings
         self.fig, self.ax = plt.subplots(figsize=(6, 1.5))
+        self.fig.patch.set_facecolor('none')  # Transparent background
+        
+        # Create canvas and explicitly set master
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack()
+        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+        
+        self.canvas.draw()
+        plt.close(self.fig)  # Close the figure manager but keep the canvas
 
     def update_temperature(self, temperature):
         if temperature != "n/a":
@@ -262,20 +144,23 @@ class FanSpeedGraph:
 import ttkbootstrap as ttk
 from ttkbootstrap.constants import *
 from tkinter.simpledialog import askstring
-import sys
+import os
 import subprocess
 from ryzen_master_commander.app.graphs import TemperatureGraph, FanSpeedGraph
-from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
+from ryzen_master_commander.app.system_utils import get_system_readings
 from ryzen_master_commander.app.profile_manager import ProfileManager
 
 class MainWindow:
     def __init__(self, root):
         self.root = root
+        
+        # The rest of your initialization code
         self.graph_visible = True
         self.graph_frame = None
         self.profile_manager = ProfileManager(self.root)
         self.fan_speed_adjustment_delay = None
 
+        # Create widgets in the provided root window
         self.create_widgets()
         # Delay the first reading to allow window to appear
         self.root.after(1000, self.update_readings)
@@ -406,13 +291,30 @@ class MainWindow:
     #         frame.pack()
 
     def toggle_graph(self):
+        # Get current window dimensions
+        current_width = self.root.winfo_width()
+        current_height = self.root.winfo_height()
+        
         if self.graph_visible:
+            # Hide graph
             self.graph_frame.pack_forget()
             self.graph_button.config(text="Show Graph")
+            # Reduce window height by 300 pixels
+            new_height = max(950, current_height - 300)  # Ensure minimum height of 950
+            self.root.geometry(f"{current_width}x{new_height}")
         else:
+            # Show graph
             self.graph_frame.pack(side=ttk.TOP, fill=ttk.BOTH, expand=True)
             self.graph_button.config(text="Hide Graph")
+            # Increase window height by 300 pixels
+            new_height = current_height + 300
+            self.root.geometry(f"{current_width}x{new_height}")
+        
         self.graph_visible = not self.graph_visible
+        
+        # Center the window after resizing
+        # self.center_window_after_resize()
+
     
     def setup_system_tray(self):
         """Set up system tray icon for Linux desktop environments"""
@@ -467,10 +369,21 @@ import os
 class ProfileManager:
     def __init__(self, root):
         self.root = root
-        self.profiles_directory = "./tdp_profiles"
+        
+        # Check multiple potential profile directories
+        potential_dirs = [
+            "./tdp_profiles",  # Development location
+            "/usr/share/ryzen-master-commander/tdp_profiles",  # System-wide installation
+            os.path.expanduser("~/.local/share/ryzen-master-commander/tdp_profiles")  # User installation
+        ]
+        
+        # Use the first directory that exists
+        self.profiles_directory = next((d for d in potential_dirs if os.path.exists(d)), "./tdp_profiles")
+        print(f"Using profiles from: {self.profiles_directory}")
+        
         self.current_profile = None
-
         self.load_profiles()
+
 
     def create_widgets(self, content_frame):
         profile_frame = ttk.Frame(content_frame)
@@ -605,16 +518,15 @@ def get_system_readings():
         return "n/a", "n/a"
 
     temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
-    fan_speed_match = re.search(r'Current fan speed\s+:\s+(\d+\.?\d*)', output)
+    fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
 
     temperature = temperature_match.group(1) if temperature_match else "n/a"
     fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
     return temperature, fan_speed
 
 def apply_tdp_settings(current_profile):
-    # Remove sudo_password parameter
     if current_profile:
-        command = ['pkexec', 'ryzenadj']  # Use pkexec instead of sudo
+        command = ['pkexec', 'ryzenadj']
         for key, value in current_profile.items():
             if key in ["fast-limit", "slow-limit"]:
                 command.extend([f'--{key}={value * 1000}'])
@@ -627,7 +539,7 @@ def apply_tdp_settings(current_profile):
         elif current_profile.get("max_performance"):
             command.append("--max-performance")
         try:
-            subprocess.run(command)  # No input needed with pkexec
+            subprocess.run(command)
         except subprocess.CalledProcessError as e:
             print(f"Error applying TDP settings: {e}")
 
@@ -638,22 +550,57 @@ def apply_tdp_settings(current_profile):
 ```py
 import ttkbootstrap as ttk
 from ryzen_master_commander.app.main_window import MainWindow
-import time
+import os
+from ryzen_master_commander.singleton import SingleInstance
+# import matplotlib
+# matplotlib.use('TkAgg')
+
+_singleton = None
 
 def main():
+    global _singleton
+    
+    # Create the singleton at the very beginning of main
+    # This will exit the program if another instance is already running
+    _singleton = SingleInstance("ryzen-master-commander")
+    
+    # The rest of your main function continues as normal
     theme = detect_system_theme()
     root = ttk.Window(themename=theme)
     root.title("Ryzen Master and Commander")
+
     root.geometry("500x950")
     
-    # Center the window on the screen
+    # Set the window icon immediately
+    try:
+        icon_paths = [
+            "/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+            "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+            "./img/icon.png"
+        ]
+        
+        for path in icon_paths:
+            if os.path.exists(path):
+                from PIL import Image, ImageTk
+                icon = ImageTk.PhotoImage(Image.open(path))
+                root.iconphoto(False, icon)  # Changed to False to not affect future windows
+                break
+                
+        # Set window class for KDE
+        root.tk.call('wm', 'class', root._w, "ryzen-master-commander")
+    except Exception as e:
+        print(f"Error setting application icon: {e}")
+    
+    # Center window first, before adding any content
     center_window(root, 500, 950)
     
+    # Ensure the window is visible and drawn before creating MainWindow
+    root.update_idletasks()
+    
+    # Now create the main window using our already configured root
     app = MainWindow(root)
     
-    # Use after method to ensure window visibility after initialization
-    root.after(100, lambda: ensure_window_visible(root))
-    
+    # Start the main loop with the fully configured window
     root.mainloop()
 
 def center_window(window, width, height):
@@ -715,21 +662,5 @@ def detect_system_theme():
 
 if __name__ == "__main__":
     app.main()
-```
----
-## File: share/applications/ryzen-master-commander.desktop
-
-```desktop
-[Desktop Entry]
-Name=Ryzen Master Commander
-Comment=AMD Ryzen TDP and Fan Control
-GenericName=Hardware Control
-Exec=ryzen-master-commander
-Icon=/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png
-Terminal=false
-Type=Application
-Categories=System;Settings;HardwareSettings;
-Keywords=AMD;Ryzen;TDP;Fan;Control;
-StartupNotify=true
 ```
 ---

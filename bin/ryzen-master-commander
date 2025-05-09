@@ -6,7 +6,3 @@ export DESKTOP_STARTUP_ID="ryzen-master-commander"
 
 # Use the absolute path to Python to avoid environment issues
 /usr/bin/python -m ryzen_master_commander.main "$@"
-
-# If you're getting a flash of a window before the main app appears,
-# you might need to add a short sleep to let the process initialize
-# sleep 0.1

@@ -85,17 +85,45 @@ class ProfileManager:
         profiles = []
         if not os.path.exists(self.profiles_directory):
             os.makedirs(self.profiles_directory)
-        for file in os.listdir(self.profiles_directory):
+            print(f"Created profiles directory: {self.profiles_directory}")
+        
+        # Debug: list all files in the directory
+        files = os.listdir(self.profiles_directory)
+        print(f"Found {len(files)} files in profiles directory: {files}")
+        
+        for file in files:
             if file.endswith(".json"):
                 file_path = os.path.join(self.profiles_directory, file)
                 try:
                     with open(file_path, "r") as f:
-                        profile = json.load(f)
+                        file_content = f.read()
+                        profile = json.loads(file_content)
+                        
+                        # Validate profile has required fields
+                        if "name" not in profile:
+                            print(f"Warning: Profile '{file}' missing required 'name' field")
+                            profile["name"] = os.path.splitext(file)[0]  # Use filename as name
+                        
                         profiles.append(profile)
+                        print(f"Successfully loaded profile: {profile['name']}")
                 except json.JSONDecodeError as e:
                     print(f"Error loading profile '{file}': {e}")
-                    print(f"Skipping profile '{file}'")
+                    print(f"Content causing error: {file_content[:100]}...")
+                except Exception as e:
+                    print(f"Unexpected error loading profile '{file}': {e}")
+        
+        print(f"Loaded {len(profiles)} profiles total")
+        self.cached_profiles = profiles  # Store for reuse
         return profiles
+
+    def update_profile_dropdown(self):
+        profiles = self.load_profiles()
+        if profiles:
+            profile_names = [profile["name"] for profile in profiles]
+            print(f"Setting dropdown values to: {profile_names}")
+            self.profile_dropdown['values'] = profile_names
+        else:
+            print("No profiles found to populate dropdown")
 
     def save_profile(self):
         profile_name = askstring("Save Profile", "Enter profile name:")
@@ -113,10 +141,6 @@ class ProfileManager:
             with open(os.path.join(self.profiles_directory, f"{profile_name}.json"), "w") as f:
                 json.dump(profile, f)
             self.update_profile_dropdown()
-
-    def update_profile_dropdown(self):
-        profiles = self.load_profiles()
-        self.profile_dropdown['values'] = [profile["name"] for profile in profiles]
 
     def on_profile_select(self, event):
         selected_profile = self.profile_dropdown.get()

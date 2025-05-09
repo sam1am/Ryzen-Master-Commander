@@ -1,24 +1,15 @@
 import ttkbootstrap as ttk
 from ryzen_master_commander.app.main_window import MainWindow
 import os
-from ryzen_master_commander.singleton import SingleInstance
 # import matplotlib
 # matplotlib.use('TkAgg')
 
-_singleton = None
-
 def main():
-    global _singleton
-    
-    # Create the singleton at the very beginning of main
-    # This will exit the program if another instance is already running
-    _singleton = SingleInstance("ryzen-master-commander")
-    
-    # The rest of your main function continues as normal
     theme = detect_system_theme()
+    
+    # Create the root window ONCE and keep it for the entire app lifecycle
     root = ttk.Window(themename=theme)
     root.title("Ryzen Master and Commander")
-
     root.geometry("500x950")
     
     # Set the window icon immediately

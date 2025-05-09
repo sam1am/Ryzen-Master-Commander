@@ -10,3 +10,4 @@ Categories=System;Settings;HardwareSettings;
 Keywords=AMD;Ryzen;TDP;Fan;Control;
 StartupNotify=true
 StartupWMClass=ryzen-master-commander
+Path=/usr/share/ryzen-master-commander
