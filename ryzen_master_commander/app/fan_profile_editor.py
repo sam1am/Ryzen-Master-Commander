@@ -1,19 +1,24 @@
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import json
 import os
-import subprocess
-from tkinter import filedialog, messagebox
-import numpy as np
 import glob
+import json
+import subprocess
+import numpy as np
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
+                            QLabel, QComboBox, QPushButton, QLineEdit, QMessageBox)
+from PyQt5.QtCore import Qt
 
-class FanProfileEditor:
-    def __init__(self, parent):
-        self.parent = parent
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+class FanProfileEditor(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        
         self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve points (temp, fan_speed)
         self.current_config = None  # Store the full config for saving
+        self.hover_point = None
+        self.drag_point = None
         
         # NBFC configs directory
         self.nbfc_configs_dir = "/usr/share/nbfc/configs/"
@@ -23,109 +28,115 @@ class FanProfileEditor:
         if not os.path.exists(self.user_configs_dir):
             os.makedirs(self.user_configs_dir, exist_ok=True)
         
-        # Main frame
-        self.main_frame = ttk.Frame(parent)
-        self.main_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        self.init_ui()
+    
+    def init_ui(self):
+        self.setWindowTitle("NBFC Fan Profile Editor")
+        self.resize(800, 600)
+        
+        # Create central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
         
         # Title
-        title_label = ttk.Label(self.main_frame, text="NBFC Fan Profile Editor", font=("Helvetica", 16, "bold"))
-        title_label.pack(pady=(0, 10))
+        title_label = QLabel("NBFC Fan Profile Editor")
+        title_label.setAlignment(Qt.AlignCenter)
+        font = title_label.font()
+        font.setPointSize(16)
+        font.setBold(True)
+        title_label.setFont(font)
+        main_layout.addWidget(title_label)
         
         # Available profiles frame
-        profiles_frame = ttk.LabelFrame(self.main_frame, text="Available Profiles")
-        profiles_frame.pack(fill=X, pady=10)
+        profiles_group = QGroupBox("Available Profiles")
+        profiles_layout = QHBoxLayout(profiles_group)
         
-        # Profile selection
+        profiles_layout.addWidget(QLabel("Select Profile:"))
+        
         self.profiles_list = self.get_available_profiles()
-        profile_label = ttk.Label(profiles_frame, text="Select Profile:")
-        profile_label.pack(side=LEFT, padx=5, pady=5)
+        self.profile_dropdown = QComboBox()
+        self.profile_dropdown.addItems(self.profiles_list)
+        self.profile_dropdown.currentIndexChanged.connect(self.on_profile_selected)
+        profiles_layout.addWidget(self.profile_dropdown, 1)
         
-        self.profile_var = ttk.StringVar()
-        profile_combobox = ttk.Combobox(profiles_frame, textvariable=self.profile_var, 
-                                        values=self.profiles_list, width=40)
-        profile_combobox.pack(side=LEFT, fill=X, expand=True, padx=5, pady=5)
-        profile_combobox.bind("<<ComboboxSelected>>", self.on_profile_selected)
+        load_btn = QPushButton("Load")
+        load_btn.clicked.connect(self.load_selected_profile)
+        profiles_layout.addWidget(load_btn)
         
-        load_btn = ttk.Button(profiles_frame, text="Load", command=self.load_selected_profile)
-        load_btn.pack(side=LEFT, padx=5, pady=5)
+        apply_btn = QPushButton("Apply")
+        apply_btn.clicked.connect(self.apply_selected_profile)
+        profiles_layout.addWidget(apply_btn)
         
-        apply_btn = ttk.Button(profiles_frame, text="Apply", command=self.apply_selected_profile)
-        apply_btn.pack(side=LEFT, padx=5, pady=5)
+        main_layout.addWidget(profiles_group)
         
-        # Create the figure and plot
-        self.fig, self.ax = plt.subplots(figsize=(6, 4))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.main_frame)
-        self.canvas_widget = self.canvas.get_tk_widget()
-        self.canvas_widget.pack(fill=BOTH, expand=True)
-        
-        # Connect mouse events
+        # Matplotlib figure for plotting
+        self.fig = Figure(figsize=(6, 4), dpi=100)
+        self.ax = self.fig.add_subplot(111)
+        self.canvas = FigureCanvas(self.fig)
         self.canvas.mpl_connect('button_press_event', self.on_click)
         self.canvas.mpl_connect('motion_notify_event', self.on_hover)
         self.canvas.mpl_connect('button_release_event', self.on_release)
+        main_layout.addWidget(self.canvas)
         
-        # Active point for dragging
-        self.hover_point = None
-        self.drag_point = None
+        # Controls for curve manipulation
+        controls_group = QGroupBox("Curve Controls")
+        controls_layout = QHBoxLayout(controls_group)
         
-        # Add controls frame
-        controls_frame = ttk.Frame(self.main_frame)
-        controls_frame.pack(fill=X, pady=10)
+        add_point_btn = QPushButton("Add Point")
+        add_point_btn.clicked.connect(self.add_point)
+        controls_layout.addWidget(add_point_btn)
         
-        # Add point button
-        add_point_btn = ttk.Button(controls_frame, text="Add Point", command=self.add_point)
-        add_point_btn.pack(side=LEFT, padx=5)
+        remove_point_btn = QPushButton("Remove Point")
+        remove_point_btn.clicked.connect(self.remove_point)
+        controls_layout.addWidget(remove_point_btn)
         
-        # Remove point button
-        remove_point_btn = ttk.Button(controls_frame, text="Remove Point", command=self.remove_point)
-        remove_point_btn.pack(side=LEFT, padx=5)
+        reset_btn = QPushButton("Reset")
+        reset_btn.clicked.connect(self.reset_curve)
+        controls_layout.addWidget(reset_btn)
         
-        # Reset button
-        reset_btn = ttk.Button(controls_frame, text="Reset", command=self.reset_curve)
-        reset_btn.pack(side=LEFT, padx=5)
+        main_layout.addWidget(controls_group)
         
-        # Save frame
-        save_frame = ttk.LabelFrame(self.main_frame, text="Save Profile")
-        save_frame.pack(fill=X, pady=10)
+        # Save profile section
+        save_group = QGroupBox("Save Profile")
+        save_layout = QHBoxLayout(save_group)
         
-        # Profile name entry
-        name_label = ttk.Label(save_frame, text="Profile Name:")
-        name_label.pack(side=LEFT, padx=5, pady=5)
+        save_layout.addWidget(QLabel("Profile Name:"))
         
-        self.custom_profile_name = ttk.StringVar(value="MyCustomProfile")
-        name_entry = ttk.Entry(save_frame, textvariable=self.custom_profile_name, width=30)
-        name_entry.pack(side=LEFT, fill=X, expand=True, padx=5, pady=5)
+        self.custom_profile_name = QLineEdit("MyCustomProfile")
+        save_layout.addWidget(self.custom_profile_name, 1)
         
-        save_btn = ttk.Button(save_frame, text="Save Custom Profile", command=self.save_custom_profile)
-        save_btn.pack(side=LEFT, padx=5, pady=5)
+        save_btn = QPushButton("Save Custom Profile")
+        save_btn.clicked.connect(self.save_custom_profile)
+        save_layout.addWidget(save_btn)
+        
+        main_layout.addWidget(save_group)
         
         # Initialize plot
         self.update_plot()
         
         # Load a default profile if available
         if self.profiles_list:
-            self.profile_var.set(self.profiles_list[0])
+            self.on_profile_selected(0)
     
     def get_available_profiles(self):
         """Get list of available NBFC profiles"""
         # Check system profiles
         system_profiles = glob.glob(os.path.join(self.nbfc_configs_dir, "*.json"))
         
-        # Check user profiles
-        # user_profiles = glob.glob(os.path.join(self.user_configs_dir, "*.json"))
-        
-        # Combine and extract names
-        all_profiles = system_profiles
-        profile_names = [os.path.splitext(os.path.basename(p))[0] for p in all_profiles]
+        # Extract names
+        profile_names = [os.path.splitext(os.path.basename(p))[0] for p in system_profiles]
         
         return sorted(profile_names)
     
-    def on_profile_selected(self, event):
+    def on_profile_selected(self, index):
         """Handle profile selection from dropdown"""
-        self.load_selected_profile()
+        if index >= 0:
+            self.load_selected_profile()
     
     def load_selected_profile(self):
         """Load the currently selected profile"""
-        profile_name = self.profile_var.get()
+        profile_name = self.profile_dropdown.currentText()
         if not profile_name:
             return
             
@@ -138,7 +149,7 @@ class FanProfileEditor:
         elif os.path.exists(system_path):
             file_path = system_path
         else:
-            messagebox.showerror("Error", f"Profile '{profile_name}' not found")
+            QMessageBox.critical(self, "Error", f"Profile '{profile_name}' not found")
             return
             
         try:
@@ -185,51 +196,37 @@ class FanProfileEditor:
                     # Use the extracted points
                     self.points = curve_points
                     self.update_plot()
-                    messagebox.showinfo("Success", f"Loaded fan curve from '{profile_name}'")
+                    # QMessageBox.information(self, "Success", f"Loaded fan curve from '{profile_name}'")
                 else:
                     # No points found, create default
                     self.reset_curve()
-                    messagebox.showinfo("Note", "No fan curve found, using default curve")
+                    QMessageBox.information(self, "Note", "No fan curve found, using default curve")
             else:
-                messagebox.showwarning("Warning", "Selected profile doesn't contain fan configuration")
+                QMessageBox.warning(self, "Warning", "Selected profile doesn't contain fan configuration")
                 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load profile: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to load profile: {str(e)}")
             self.reset_curve()
     
     def apply_selected_profile(self):
         """Apply the selected profile using nbfc command"""
-        profile_name = self.profile_var.get()
+        profile_name = self.profile_dropdown.currentText()
         if not profile_name:
-            messagebox.showwarning("Warning", "Please select a profile first")
+            QMessageBox.warning(self, "Warning", "Please select a profile first")
             return
             
         try:
-            # Use the correct command format, without including quotes in the string
-            # subprocess handles spaces in arguments correctly when using a list
             subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True)
-            
-            # For debugging, log the exact command
-            print(f"Executing: pkexec nbfc config -a '{profile_name}'")
-            
-            messagebox.showinfo("Success", f"Applied fan profile '{profile_name}'")
+            QMessageBox.information(self, "Success", f"Applied fan profile '{profile_name}'")
         except subprocess.CalledProcessError as e:
-            # Enhanced error message with the command that was run
             error_msg = f"Command failed: pkexec nbfc config -a '{profile_name}'\nError: {str(e)}"
-            messagebox.showerror("Error", error_msg)
-            
-            # Try getting help output for debugging
-            try:
-                help_output = subprocess.check_output(['nbfc', 'config', '--help'], text=True)
-                print(f"NBFC config help:\n{help_output}")
-            except:
-                pass
+            QMessageBox.critical(self, "Error", error_msg)
     
     def save_custom_profile(self):
         """Save the current fan curve as a custom NBFC profile with root privileges"""
-        name = self.custom_profile_name.get()
+        name = self.custom_profile_name.text()
         if not name:
-            messagebox.showwarning("Warning", "Please enter a profile name")
+            QMessageBox.warning(self, "Warning", "Please enter a profile name")
             return
                 
         # Start with a template or use current loaded config as base
@@ -289,30 +286,22 @@ class FanProfileEditor:
                 'pkexec', 'cp', temp_file, target_file
             ], check=True)
             
-            messagebox.showinfo("Success", f"Saved profile to {target_file}")
+            QMessageBox.information(self, "Success", f"Saved profile to {target_file}")
             
             # Update the profile list
-            self.profiles_list = self.get_available_profiles()
-            
-            # Rather than trying to find the combobox widget directly, create a variable 
-            # at initialization time to store it, or simply refresh the entire UI
             self.refresh_ui()
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save profile: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to save profile: {str(e)}")
 
     def refresh_ui(self):
         """Refresh the profile list in the UI"""
         # Get updated profile list
         self.profiles_list = self.get_available_profiles()
         
-        # Find all combobox widgets and update them
-        for child in self.main_frame.winfo_children():
-            if isinstance(child, ttk.Labelframe) and child.cget("text") == "Available Profiles":
-                for widget in child.winfo_children():
-                    if isinstance(widget, ttk.Combobox):
-                        widget['values'] = self.profiles_list
-                        return
+        # Update dropdown
+        self.profile_dropdown.clear()
+        self.profile_dropdown.addItems(self.profiles_list)
     
     def update_plot(self):
         self.ax.clear()
@@ -341,6 +330,7 @@ class FanProfileEditor:
         self.ax.set_title('Fan Speed Curve')
         
         # Draw the plot
+        self.fig.tight_layout()
         self.canvas.draw()
     
     def on_click(self, event):
@@ -358,7 +348,7 @@ class FanProfileEditor:
                         self.points.pop(i)
                         self.update_plot()
                     else:
-                        messagebox.showinfo("Can't Remove", "Fan curve must have at least 2 points")
+                        QMessageBox.information(self, "Can't Remove", "Fan curve must have at least 2 points")
                     return
         
         # If double click and not on point, add new point
@@ -421,7 +411,8 @@ class FanProfileEditor:
             self.hover_point = None
             self.update_plot()
         else:
-            messagebox.showinfo("Remove Point", "Hover over a point to select it first, or fan curve must have at least 2 points")
+            QMessageBox.information(self, "Remove Point", 
+                                    "Hover over a point to select it first, or fan curve must have at least 2 points")
     
     def reset_curve(self):
         self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve

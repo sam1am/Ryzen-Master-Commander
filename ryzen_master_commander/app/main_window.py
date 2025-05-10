@@ -1,250 +1,230 @@
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-from tkinter.simpledialog import askstring
 import os
 import subprocess
-from ryzen_master_commander.app.graphs import TemperatureGraph, FanSpeedGraph
-from ryzen_master_commander.app.system_utils import get_system_readings
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
+                            QSlider, QComboBox, QGroupBox, QCheckBox, QPushButton, 
+                            QRadioButton, QStatusBar, QFrame, QSplitter, QApplication)
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot
+from PyQt5.QtGui import QFont
+
+from ryzen_master_commander.app.graphs import CombinedGraph
+from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
 from ryzen_master_commander.app.profile_manager import ProfileManager
 from ryzen_master_commander.app.fan_profile_editor import FanProfileEditor
 
-class MainWindow:
-    def __init__(self, root):
-        self.root = root
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
         
-        # The rest of your initialization code
-        self.graph_visible = True
-        self.graph_frame = None
-        self.profile_manager = ProfileManager(self.root)
+        # Initialize instance variables
+        self.profile_manager = ProfileManager()
         self.fan_speed_adjustment_delay = None
-
-        self.control_mode_var = ttk.StringVar(value='auto')
-
-        # Create widgets in the provided root window
-        self.create_widgets()
+        self.graph_visible = True
+        
+        # Set up the UI
+        self.init_ui()
+        
+        # Set auto control by default
+        self.radio_auto_control.setChecked(True)
         self.set_auto_control()
-        # Delay the first reading to allow window to appear
-        self.root.after(1000, self.update_readings)
-
-    def create_widgets(self):
-        # Create main frame, canvas, and scrollbar
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=ttk.BOTH, expand=True)
-
-        canvas = ttk.Canvas(main_frame)
-        canvas.pack(side=ttk.LEFT, fill=ttk.BOTH, expand=True)
-
-        scrollbar = ttk.Scrollbar(main_frame, orient=ttk.VERTICAL, command=canvas.yview)
-        scrollbar.pack(side=ttk.RIGHT, fill=ttk.Y)
-
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
-
-        content_frame = ttk.Frame(canvas)
-        canvas.create_window((0, 0), window=content_frame, anchor='nw')
-
-        # Create a frame for the graph with a specific width
-        self.graph_frame = ttk.Frame(content_frame, height=400,width=300)  # Set the desired width here
-        self.graph_frame.pack_propagate(False)  # Prevent the frame from shrinking
-
-        # Create temperature graph
-        self.temperature_graph = TemperatureGraph(self.graph_frame)
-
-        # Create fan speed graph
-        self.fan_speed_graph = FanSpeedGraph(self.graph_frame)
-
-        # Create temperature label
-        self.temp_label = ttk.Label(content_frame, text="Temperature: ")
-        self.temp_label.pack(pady=5)
-
-        # Curent profile label
-        self.current_profile_label = ttk.Label(content_frame, text="Current Profile: ")
-        self.current_profile_label.pack(pady=5)
-
-        # Create fan speed label
-        self.fan_speed_label = ttk.Label(content_frame, text="Fan Speed: ")
-        self.fan_speed_label.pack(pady=5)
-
-        # Create a separator
-        separator = ttk.Separator(content_frame, orient='horizontal')
-        separator.pack(fill='x', pady=10)
-
-        # Create a frame to center the content below the graph
-        center_frame = ttk.Frame(content_frame)
-        center_frame.pack(pady=10)
-
-        # Create fan controls
-        fan_controls_label = ttk.Label(center_frame, text="Fan Controls", font=("Helvetica", 14, "bold"))
-        fan_controls_label.pack(pady=5)
-
-        fan_profile_editor_btn = ttk.Button(center_frame, text="Fan Profile Editor", command=self.open_fan_profile_editor)
-        fan_profile_editor_btn.pack(pady=10)
-
-        refresh_label = ttk.Label(center_frame, text="Refresh Interval (seconds): ")
-        refresh_label.pack(pady=5)
-        self.refresh_slider = ttk.Scale(center_frame, from_=1, to_=30, orient='horizontal', length=300)
-        self.refresh_slider.pack(pady=(0, 5))
-        self.refresh_slider.set(5)
-
-        manual_control_label = ttk.Label(center_frame, text="Manual Fan Speed (%): ")
-        manual_control_label.pack(pady=5)
-        self.fan_speed_control_slider = ttk.Scale(center_frame, from_=0, to_=100, orient='horizontal', length=300, command=self.delayed_fan_setting)
-        self.fan_speed_control_slider.pack(pady=(0, 5))
-        self.fan_speed_control_slider.set(50)
-
-        self.manual_control_value_label = ttk.Label(center_frame, text="50%")
-        self.manual_control_value_label.pack(pady=(0, 10))
-
-        control_mode_frame = ttk.Frame(center_frame)
-        control_mode_frame.pack(pady=5)
-        self.radio_auto_control = ttk.Radiobutton(control_mode_frame, text='Auto Control', 
-                                                value='auto', variable=self.control_mode_var, 
-                                                command=self.set_auto_control)
-        self.radio_auto_control.grid(row=0, column=0, padx=5)
-        self.radio_manual_control = ttk.Radiobutton(control_mode_frame, text='Manual Control', 
-                                                value='manual', variable=self.control_mode_var, 
-                                                command=self.set_manual_control)
-        self.radio_manual_control.grid(row=0, column=1, padx=5)
-
-        # Create a button to toggle graph visibility
-        self.graph_button = ttk.Button(content_frame, text="Show Graph", command=self.toggle_graph)
-        self.graph_button.pack(pady=5)
-
-        # Create TDP controls
-        separator = ttk.Separator(center_frame, orient='horizontal')
-        separator.pack(fill='x', pady=10)
-
-        tdp_controls_label = ttk.Label(center_frame, text="TDP Controls", font=("Helvetica", 14, "bold"))
-        tdp_controls_label.pack(pady=5)
-
-        self.profile_manager.create_widgets(center_frame)
-        # self.setup_system_tray()
-
+        
+        # Start reading system values
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.timeout.connect(self.update_readings)
+        self.refresh_timer.start(5000)  # Initial refresh every 5 seconds
+        
+        # Schedule first reading
+        QTimer.singleShot(1000, self.update_readings)
+    
+    def init_ui(self):
+        # Set window properties
+        self.setWindowTitle("Ryzen Master Commander")
+        self.resize(900, 600)
+        
+        # Create central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Main layout
+        main_layout = QVBoxLayout(central_widget)
+        
+        # Create splitter for graphs and controls
+        splitter = QSplitter(Qt.Vertical)
+        main_layout.addWidget(splitter, 1)
+        
+        # Create graph widget
+        self.graph_widget = QWidget()
+        graph_layout = QVBoxLayout(self.graph_widget)
+        
+        # Add combined graph
+        graph_group = QGroupBox("System Monitoring")
+        graph_inner_layout = QVBoxLayout(graph_group)
+        self.combined_graph = CombinedGraph(self)
+        graph_inner_layout.addWidget(self.combined_graph)
+        graph_layout.addWidget(graph_group)
+        
+        splitter.addWidget(self.graph_widget)
+        
+        # Controls container
+        controls_container = QWidget()
+        controls_layout = QHBoxLayout(controls_container)
+        splitter.addWidget(controls_container)
+        
+        # Set initial sizes for splitter
+        splitter.setSizes([200, 400])
+        
+        # Create TDP Controls group box
+        tdp_group = QGroupBox("TDP Controls")
+        tdp_layout = QVBoxLayout(tdp_group)
+        self.profile_manager.create_widgets(tdp_group)
+        controls_layout.addWidget(tdp_group)
+        
+        # Create Fan Controls group box
+        fan_group = QGroupBox("Fan Controls")
+        fan_layout = QVBoxLayout(fan_group)
+        
+        # Fan profile editor button
+        fan_profile_editor_btn = QPushButton("Fan Profile Editor")
+        fan_profile_editor_btn.clicked.connect(self.open_fan_profile_editor)
+        fan_layout.addWidget(fan_profile_editor_btn)
+        
+        # Refresh interval slider
+        refresh_label = QLabel("Refresh Interval (seconds):")
+        fan_layout.addWidget(refresh_label)
+        
+        self.refresh_slider = QSlider(Qt.Horizontal)
+        self.refresh_slider.setRange(1, 30)
+        self.refresh_slider.setValue(5)
+        self.refresh_slider.setTickPosition(QSlider.TicksBelow)
+        self.refresh_slider.setTickInterval(5)
+        self.refresh_slider.valueChanged.connect(self.update_refresh_interval)
+        fan_layout.addWidget(self.refresh_slider)
+        
+        refresh_value_layout = QHBoxLayout()
+        refresh_value_layout.addWidget(QLabel("1"))
+        refresh_value_layout.addStretch()
+        refresh_value_layout.addWidget(QLabel("30"))
+        fan_layout.addLayout(refresh_value_layout)
+        
+        # Fan control mode
+        control_mode_group = QGroupBox("Fan Control Mode")
+        control_mode_layout = QHBoxLayout(control_mode_group)
+        
+        self.radio_auto_control = QRadioButton("Auto Control")
+        self.radio_auto_control.toggled.connect(self.set_auto_control)
+        control_mode_layout.addWidget(self.radio_auto_control)
+        
+        self.radio_manual_control = QRadioButton("Manual Control")
+        self.radio_manual_control.toggled.connect(self.set_manual_control)
+        control_mode_layout.addWidget(self.radio_manual_control)
+        
+        fan_layout.addWidget(control_mode_group)
+        
+        # Manual fan speed slider
+        manual_control_label = QLabel("Manual Fan Speed (%):")
+        fan_layout.addWidget(manual_control_label)
+        
+        self.fan_speed_control_slider = QSlider(Qt.Horizontal)
+        self.fan_speed_control_slider.setRange(0, 100)
+        self.fan_speed_control_slider.setValue(50)
+        self.fan_speed_control_slider.setTickPosition(QSlider.TicksBelow)
+        self.fan_speed_control_slider.setTickInterval(10)
+        self.fan_speed_control_slider.valueChanged.connect(self.delayed_fan_setting)
+        self.fan_speed_control_slider.setEnabled(False)  # Disabled by default (auto mode)
+        fan_layout.addWidget(self.fan_speed_control_slider)
+        
+        fan_speed_value_layout = QHBoxLayout()
+        fan_speed_value_layout.addWidget(QLabel("0%"))
+        fan_speed_value_layout.addStretch()
+        self.manual_control_value_label = QLabel("50%")
+        fan_speed_value_layout.addWidget(self.manual_control_value_label)
+        fan_speed_value_layout.addStretch()
+        fan_speed_value_layout.addWidget(QLabel("100%"))
+        fan_layout.addLayout(fan_speed_value_layout)
+        
+        # Toggle graph button
+        toggle_graph_btn = QPushButton("Hide Graphs")
+        toggle_graph_btn.clicked.connect(self.toggle_graph)
+        self.toggle_graph_btn = toggle_graph_btn
+        fan_layout.addWidget(toggle_graph_btn)
+        
+        fan_layout.addStretch()
+        controls_layout.addWidget(fan_group)
+        
+        # Create status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        
+        # Status bar widgets
+        self.temp_label = QLabel("Temperature: --°C")
+        self.fan_speed_label = QLabel("Fan Speed: --%")
+        self.current_profile_label = QLabel("Current Profile: --")
+        
+        # Add separators between status items
+        self.status_bar.addPermanentWidget(self.temp_label)
+        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.VLine))
+        self.status_bar.addPermanentWidget(self.fan_speed_label)
+        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.VLine))
+        self.status_bar.addPermanentWidget(self.current_profile_label)
+    
     def update_readings(self):
         temperature, fan_speed, current_profile = get_system_readings()
-
-        self.temp_label.config(text=f"Temperature: {temperature} °C")
-        self.fan_speed_label.config(text=f"Fan Speed: {fan_speed}%")
-        self.temperature_graph.update_temperature(temperature)
-        self.fan_speed_graph.update_fan_speed(fan_speed)
-        self.current_profile_label.config(text=f"Current Profile: {current_profile}")
-
-        refresh_seconds = int(self.refresh_slider.get())
-        self.root.after(refresh_seconds * 1000, self.update_readings)
-
-    def delayed_fan_setting(self, value):
-        if self.fan_speed_adjustment_delay is not None:
-            self.root.after_cancel(self.fan_speed_adjustment_delay)
-        self.fan_speed_adjustment_delay = self.root.after(1000, self.apply_fan_speed, value)
-
-    def apply_fan_speed(self, value):
-        slider_value = round(float(value))
+        
+        # Update status bar labels
+        self.temp_label.setText(f"Temperature: {temperature}°C")
+        self.fan_speed_label.setText(f"Fan Speed: {fan_speed}%")
+        self.current_profile_label.setText(f"Current Profile: {current_profile}")
+        
+        # Update combined graph
+        self.combined_graph.update_data(temperature, fan_speed)
+    
+    def update_refresh_interval(self):
+        refresh_seconds = self.refresh_slider.value() * 1000  # Convert to milliseconds
+        self.refresh_timer.setInterval(refresh_seconds)
+    
+    def delayed_fan_setting(self):
+        # Cancel previous timer if it exists
+        if hasattr(self, 'delay_timer') and self.delay_timer.isActive():
+            self.delay_timer.stop()
+        
+        # Create a new timer to apply the setting after a delay
+        self.delay_timer = QTimer(self)
+        self.delay_timer.timeout.connect(self.apply_fan_speed)
+        self.delay_timer.setSingleShot(True)
+        self.delay_timer.start(1000)  # 1 second delay
+        
+        # Update the displayed value immediately
+        slider_value = self.fan_speed_control_slider.value()
+        self.manual_control_value_label.setText(f"{slider_value}%")
+    
+    def apply_fan_speed(self):
+        slider_value = self.fan_speed_control_slider.value()
         try:
             subprocess.run(['pkexec', 'nbfc', 'set', '-s', str(slider_value)])
-            self.manual_control_value_label.config(text=f"{slider_value}%")
         except subprocess.CalledProcessError as e:
             print(f"Error setting fan speed: {e}")
-
-    def open_fan_profile_editor(self):
-        # Create a new top-level window
-        editor_window = ttk.Toplevel(self.root)
-        editor_window.title("Fan Profile Editor")
-        editor_window.geometry("700x700")
-        editor_window.transient(self.root)  # Make it transient to main window
-        
-        # Center the window
-        window_width = 700
-        window_height = 700
-        screen_width = editor_window.winfo_screenwidth()
-        screen_height = editor_window.winfo_screenheight()
-        x = (screen_width - window_width) // 2
-        y = (screen_height - window_height) // 2
-        editor_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        
-        # Create the fan profile editor
-        editor = FanProfileEditor(editor_window)
-
-
+    
     def set_auto_control(self):
-        self.current_control_mode = 'auto'
-        try:
-            subprocess.run(['pkexec', 'nbfc', 'set', '-a'])
-        except subprocess.CalledProcessError as e:
-            print(f"Error setting automatic fan control: {e}")
-        self.fan_speed_control_slider.config(state='disabled')
-
-
+        if self.radio_auto_control.isChecked():
+            try:
+                subprocess.run(['pkexec', 'nbfc', 'set', '-a'])
+            except subprocess.CalledProcessError as e:
+                print(f"Error setting automatic fan control: {e}")
+            self.fan_speed_control_slider.setEnabled(False)
+    
     def set_manual_control(self):
-        self.current_control_mode = 'manual'
-        self.fan_speed_control_slider.config(state='normal')
-
-    # def toggle_graph_visibility(self, frame):
-    #     if frame.winfo_viewable():
-    #         frame.pack_forget()
-    #     else:
-    #         frame.pack()
-
+        if self.radio_manual_control.isChecked():
+            self.fan_speed_control_slider.setEnabled(True)
+    
     def toggle_graph(self):
-        # Get current window dimensions
-        current_width = self.root.winfo_width()
-        current_height = self.root.winfo_height()
-        
         if self.graph_visible:
-            # Hide graph
-            self.graph_frame.pack_forget()
-            self.graph_button.config(text="Show Graph")
-            # Reduce window height by 300 pixels
-            new_height = max(950, current_height - 300)  # Ensure minimum height of 950
-            self.root.geometry(f"{current_width}x{new_height}")
+            self.graph_widget.hide()
+            self.toggle_graph_btn.setText("Show Graphs")
         else:
-            # Show graph
-            self.graph_frame.pack(side=ttk.TOP, fill=ttk.BOTH, expand=True)
-            self.graph_button.config(text="Hide Graph")
-            # Increase window height by 300 pixels
-            new_height = current_height + 300
-            self.root.geometry(f"{current_width}x{new_height}")
+            self.graph_widget.show()
+            self.toggle_graph_btn.setText("Hide Graphs")
         
         self.graph_visible = not self.graph_visible
-        
-        # Center the window after resizing
-        # self.center_window_after_resize()
-
     
-    def setup_system_tray(self):
-        """Set up system tray icon for Linux desktop environments"""
-        try:
-            import pystray
-            from PIL import Image, ImageDraw
-            
-            # Create a simple icon
-            icon_image = Image.new('RGB', (64, 64), color = (0, 0, 0))
-            d = ImageDraw.Draw(icon_image)
-            d.rectangle((10, 10, 54, 54), fill=(0, 120, 220))
-            
-            def on_quit_clicked(icon, item):
-                icon.stop()
-                self.root.destroy()
-                
-            def on_show_clicked(icon, item):
-                self.root.deiconify()
-                
-            # Create the menu
-            menu = pystray.Menu(
-                pystray.MenuItem('Show', on_show_clicked),
-                pystray.MenuItem('Quit', on_quit_clicked)
-            )
-            
-            # Create the icon
-            self.tray_icon = pystray.Icon("RyzenMasterCommander", icon_image, "Ryzen Master Commander", menu)
-            
-            # Run the icon in a separate thread
-            import threading
-            threading.Thread(target=self.tray_icon.run, daemon=True).start()
-            
-            # Make window minimize to tray but don't auto-hide on startup
-            # self.root.protocol('WM_DELETE_WINDOW', self.minimize_to_tray)
-        except ImportError:
-            print("pystray not available - system tray functionality disabled")
-            
-    # def minimize_to_tray(self):
-    #     self.root.withdraw()
+    def open_fan_profile_editor(self):
+        self.fan_editor = FanProfileEditor()
+        self.fan_editor.show()

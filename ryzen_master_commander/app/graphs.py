@@ -1,57 +1,170 @@
-import ttkbootstrap as ttk
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QColor, QPen
+import pyqtgraph as pg
+import numpy as np
 
-class TemperatureGraph:
-    def __init__(self, root):
-        self.root = root
+class CombinedGraph(QWidget):
+    def __init__(self, parent=None):
+        super(CombinedGraph, self).__init__(parent)
         self.temperature_readings = []
+        self.fanspeed_readings = []
+        self.time_points = []
         
-        # Set matplotlib to not use its own window
-        import matplotlib
-        matplotlib.use('TkAgg')
+        # Configure global PyQtGraph settings
+        pg.setConfigOptions(antialias=True)
         
-        # Create figure with proper embedding settings
-        self.fig, self.ax = plt.subplots(figsize=(6, 1.5))
-        self.fig.patch.set_facecolor('none')  # Transparent background
+        # Create layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        # Create canvas and explicitly set master
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+        # Create PlotWidget - use transparent background to respect app theme
+        self.plot_widget = pg.PlotWidget(background=None)
+        layout.addWidget(self.plot_widget)
         
-        self.canvas.draw()
-        plt.close(self.fig)  # Close the figure manager but keep the canvas
-
-    def update_temperature(self, temperature):
+        # Setup the plot
+        self.setup_plot()
+        
+    def setup_plot(self):
+        # Enable grid
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Define colors for temperature and fan speed
+        temp_color = '#3498db'  # Blue
+        fan_color = '#e74c3c'   # Red
+        
+        # Setup left Y axis (Temperature)
+        left_axis = self.plot_widget.getAxis('left')
+        left_axis.setLabel(text='Temperature', units='°C', color=temp_color)
+        left_axis.setPen(pg.mkPen(color=temp_color, width=2))
+        left_axis.setTextPen(temp_color)
+        
+        # Setup right Y axis (Fan Speed)
+        right_axis = self.plot_widget.getAxis('right')
+        right_axis.setLabel(text='Fan Speed', units='%', color=fan_color)
+        right_axis.setPen(pg.mkPen(color=fan_color, width=2))
+        right_axis.setTextPen(fan_color)
+        # IMPORTANT: Make sure right axis is showing values
+        right_axis.setStyle(showValues=True)
+        # Add tick values for fan speed (0%, 25%, 50%, 75%, 100%)
+        right_axis.setTicks([[(0, '0%'), (25, '25%'), (50, '50%'), (75, '75%'), (100, '100%')]])
+        
+        # Setup bottom X axis (Time)
+        bottom_axis = self.plot_widget.getAxis('bottom')
+        bottom_axis.setLabel('Time (seconds)')
+        
+        # Create ViewBox for Fan Speed
+        self.fan_view = pg.ViewBox()
+        self.plot_widget.scene().addItem(self.fan_view)
+        right_axis.linkToView(self.fan_view)
+        self.fan_view.setXLink(self.plot_widget.getViewBox())
+        # Fix fan speed range to 0-100%
+        self.fan_view.setYRange(0, 100, padding=0)
+        
+        # Create temperature plot
+        self.temp_curve = pg.PlotCurveItem(
+            pen=pg.mkPen(color=temp_color, width=3),
+            symbolBrush=temp_color,
+            symbolPen='w',
+            symbol='o',
+            symbolSize=7,
+            name="Temperature"
+        )
+        self.plot_widget.addItem(self.temp_curve)
+        
+        # Create fan speed plot (on secondary y-axis)
+        self.fan_curve = pg.PlotCurveItem(
+            pen=pg.mkPen(color=fan_color, width=3),
+            symbolBrush=fan_color,
+            symbolPen='w',
+            symbol='s',
+            symbolSize=7,
+            name="Fan Speed"
+        )
+        self.fan_view.addItem(self.fan_curve)
+        
+        # Create better positioned legend
+        self.legend = pg.LegendItem(offset=(30, 20))
+        self.legend.setParentItem(self.plot_widget.graphicsItem())
+        
+        # Add items to legend
+        self.legend.addItem(self.temp_curve, "Temperature (°C)")
+        # Create a proxy item for fan speed
+        self.fan_proxy = pg.PlotDataItem(
+            pen=pg.mkPen(color=fan_color, width=3),
+            symbolBrush=fan_color,
+            symbolPen='w',
+            symbol='s',
+            symbolSize=7
+        )
+        self.legend.addItem(self.fan_proxy, "Fan Speed (%)")
+        
+        # Connect resize event to update views and ensure sync
+        self.plot_widget.getViewBox().sigResized.connect(self.updateViews)
+        
+        # Update views initially
+        self.updateViews()
+        
+    def updateViews(self):
+        # Keep the views in sync when resizing
+        self.fan_view.setGeometry(self.plot_widget.getViewBox().sceneBoundingRect())
+        self.fan_view.linkedViewChanged(self.plot_widget.getViewBox(), self.fan_view.XAxis)
+        
+    def update_data(self, temperature, fan_speed):
+        if temperature == "n/a" and fan_speed == "n/a":
+            return
+        
+        # Add current time (seconds since start)
+        if not self.time_points:
+            self.time_points.append(0)
+        else:
+            self.time_points.append(self.time_points[-1] + 1)
+        
+        # Keep only the last 60 points
+        if len(self.time_points) > 60:
+            self.time_points = self.time_points[-60:]
+        
+        # Update temperature data
         if temperature != "n/a":
             self.temperature_readings.append(float(temperature))
-            self.temperature_readings = self.temperature_readings[-600:]
-            self.ax.clear()
-            self.ax.plot(self.temperature_readings, marker='o', color='b')
-            self.ax.set_title('Temperature Over Time')
-            self.ax.set_ylabel('Temperature (°C)')
-            self.ax.set_xlabel('Reading')
-            self.ax.grid(True)
-            self.canvas.draw()
-
-class FanSpeedGraph:
-    def __init__(self, root):
-        self.root = root
-        self.fanspeed_readings = []
-        self.fig, self.ax = plt.subplots(figsize=(6, 1.5))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack()
-
-    def update_fan_speed(self, fan_speed):
+        else:
+            # If no reading, use the previous value or zero
+            self.temperature_readings.append(self.temperature_readings[-1] if self.temperature_readings else 0)
+            
+        # Keep only the last 60 points
+        if len(self.temperature_readings) > 60:
+            self.temperature_readings = self.temperature_readings[-60:]
+        
+        # Update fan speed data
         if fan_speed != "n/a":
             self.fanspeed_readings.append(float(fan_speed))
-            if len(self.fanspeed_readings) > 600:
-                self.fanspeed_readings.pop(0)
-            self.ax.clear()
-            self.ax.plot(self.fanspeed_readings, marker='o', color='r')
-            self.ax.set_title('Fan Speed Over Time')
-            self.ax.set_ylabel('Fan Speed (%)')
-            self.ax.set_xlabel('Reading')
-            self.ax.set_ylim(0, 100)
-            self.ax.grid(True)
-            self.canvas.draw()
+        else:
+            # If no reading, use the previous value or zero
+            self.fanspeed_readings.append(self.fanspeed_readings[-1] if self.fanspeed_readings else 0)
+            
+        # Keep only the last 60 points
+        if len(self.fanspeed_readings) > 60:
+            self.fanspeed_readings = self.fanspeed_readings[-60:]
+        
+        # Ensure both arrays have the same length
+        min_len = min(len(self.time_points), len(self.temperature_readings), len(self.fanspeed_readings))
+        time_data = self.time_points[-min_len:]
+        temp_data = self.temperature_readings[-min_len:]
+        fan_data = self.fanspeed_readings[-min_len:]
+        
+        # Update plot data
+        self.temp_curve.setData(time_data, temp_data)
+        self.fan_curve.setData(time_data, fan_data)
+        self.fan_proxy.setData(time_data, fan_data)  # Update the legend proxy
+        
+        # Auto-scale temperature y-axis
+        if temp_data:
+            max_temp = max(temp_data) + 5
+            min_temp = max(0, min(temp_data) - 5)
+            self.plot_widget.setYRange(min_temp, max(max_temp, 50))
+        
+        # Make sure the fan scale stays 0-100
+        self.fan_view.setYRange(0, 100, padding=0)
+        
+        # Update ViewBox to ensure correct sizing
+        self.updateViews()

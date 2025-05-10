@@ -7,7 +7,7 @@ pkgdesc="TDP and fan control for AMD Ryzen processors"
 arch=('any')
 url="https://github.com/sam1am/Ryzen-Master-Commander"
 license=('MIT')
-depends=('python' 'python-ttkbootstrap' 'python-matplotlib' 'python-pillow' 'python-pystray')
+depends=('python' 'python-ttkbootstrap' 'python-matplotlib' 'python-pillow' 'python-pystray' 'python-pyqtgraph')
 optdepends=('ryzenadj: for TDP adjustment features'
             'nbfc-linux-git: for fan control features')
 makedepends=('python-setuptools')

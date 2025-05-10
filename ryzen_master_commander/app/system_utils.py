@@ -7,10 +7,10 @@ def get_system_readings():
         output = subprocess.check_output(['nbfc', 'status', '-a'], text=True)
     except subprocess.CalledProcessError as e:
         print(f"Failed to execute 'nbfc status -a': {e}")
-        return "n/a", "n/a"
+        return "n/a", "n/a", "n/a"
     except FileNotFoundError:
         print("nbfc command not found. Make sure NoteBook FanControl is installed.")
-        return "n/a", "n/a"
+        return "n/a", "n/a", "n/a"
 
     temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
     fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
@@ -29,16 +29,21 @@ def apply_tdp_settings(current_profile):
                 command.extend([f'--{key}={value * 1000}'])
             elif key == "slow-time":
                 command.extend([f'--{key}={value * 1000}'])
-            elif key not in ["name", "max_performance", "power_saving"]:
+            elif key not in ["name", "max-performance", "power-saving"]:
                 command.extend([f'--{key}={value}'])
-        if current_profile.get("power_saving"):
+        if current_profile.get("power-saving"):
             command.append("--power-saving")
-        elif current_profile.get("max_performance"):
+        elif current_profile.get("max-performance"):
             command.append("--max-performance")
         try:
             subprocess.run(command)
+            print(f"Applied TDP settings with command: {' '.join(command)}")
+            return True, "TDP settings applied successfully"
         except subprocess.CalledProcessError as e:
-            print(f"Error applying TDP settings: {e}")
+            error_msg = f"Error applying TDP settings: {e}"
+            print(error_msg)
+            return False, error_msg
+    return False, "No profile selected"
 
 def apply_fan_profile(profile_name):
     """Apply a fan profile by name with nbfc command"""

@@ -31,7 +31,7 @@ for size in ['16x16', '32x32', '64x64', '128x128']:
 
 setup(
     name="ryzen-master-commander",
-    version="1.0.0",
+    version="1.0.1",
     author="sam1am",
     author_email="noreply@merrythieves.com",
     description="TDP and fan control for AMD Ryzen processors",
@@ -44,8 +44,8 @@ setup(
         "Operating System :: POSIX :: Linux",
     ],
     install_requires=[
-        "ttkbootstrap",
-        "matplotlib",
+        "PyQt5",
+        "pyqtgraph",
         "numpy",
         "Pillow",
         "pystray",

@@ -1,105 +1,72 @@
-import ttkbootstrap as ttk
-from ryzen_master_commander.app.main_window import MainWindow
+import sys
 import os
-# import matplotlib
-# matplotlib.use('TkAgg')
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QIcon
+from ryzen_master_commander.app.main_window import MainWindow
 
 def main():
-    theme = detect_system_theme()
+    # Create Qt application
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ryzen Master Commander")
     
-    # Create the root window ONCE and keep it for the entire app lifecycle
-    root = ttk.Window(themename=theme)
-    root.title("Ryzen Master and Commander")
-    root.geometry("500x950")
+    # Set application icon
+    icon_paths = [
+        "/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+        "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+        "./img/icon.png"
+    ]
     
-    # Set the window icon immediately
+    for path in icon_paths:
+        if os.path.exists(path):
+            app.setWindowIcon(QIcon(path))
+            break
+    
+    # Configure PyQtGraph for dark/light mode
     try:
-        icon_paths = [
-            "/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
-            "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
-            "./img/icon.png"
-        ]
+        import pyqtgraph as pg
+        # Check for KDE dark mode
+        is_dark_mode = False
         
-        for path in icon_paths:
-            if os.path.exists(path):
-                from PIL import Image, ImageTk
-                icon = ImageTk.PhotoImage(Image.open(path))
-                root.iconphoto(False, icon)  # Changed to False to not affect future windows
-                break
-                
-        # Set window class for KDE
-        root.tk.call('wm', 'class', root._w, "ryzen-master-commander")
-    except Exception as e:
-        print(f"Error setting application icon: {e}")
-    
-    # Center window first, before adding any content
-    center_window(root, 500, 950)
-    
-    # Ensure the window is visible and drawn before creating MainWindow
-    root.update_idletasks()
-    
-    # Now create the main window using our already configured root
-    app = MainWindow(root)
-    
-    # Start the main loop with the fully configured window
-    root.mainloop()
-
-def center_window(window, width, height):
-    """Center the window on the screen."""
-    # Get screen dimensions
-    screen_width = window.winfo_screenwidth()
-    screen_height = window.winfo_screenheight()
-    
-    # Calculate position coordinates
-    x = (screen_width - width) // 2
-    y = (screen_height - height) // 2
-    
-    # Set window position
-    window.geometry(f"{width}x{height}+{x}+{y}")
-
-def ensure_window_visible(root):
-    if not root.winfo_viewable():
-        root.deiconify()
-    root.attributes('-topmost', True)
-    root.update()
-    root.attributes('-topmost', False)
-    root.state('normal')
-    root.focus_force()
-
-def detect_system_theme():
-    """Detect if system is using dark or light theme and return appropriate ttkbootstrap theme"""
-    import os
-    import subprocess
-    
-    # Default fallback theme
-    default_theme = "darkly"
-    
-    try:
-        # For KDE Plasma
         if os.environ.get('XDG_CURRENT_DESKTOP') == 'KDE':
-            result = subprocess.run(
-                ["kreadconfig5", "--group", "General", "--key", "ColorScheme"],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                kde_theme = result.stdout.strip().lower()
-                return "darkly" if "dark" in kde_theme else "cosmo"
-                
-        # For GNOME
-        elif os.environ.get('XDG_CURRENT_DESKTOP') in ['GNOME', 'Unity']:
-            result = subprocess.run(
-                ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0 and "dark" in result.stdout.lower():
-                return "darkly"
-            else:
-                return "cosmo"
-    except Exception as e:
-        print(f"Error detecting system theme: {e}")
+            try:
+                result = subprocess.run(
+                    ["kreadconfig5", "--group", "General", "--key", "ColorScheme"],
+                    capture_output=True, text=True
+                )
+                is_dark_mode = "dark" in result.stdout.strip().lower()
+            except Exception as e:
+                print(f"Error detecting KDE theme: {e}")
+        
+        # Another approach for dark mode detection
+        if not is_dark_mode:
+            try:
+                from PyQt5.QtGui import QPalette
+                app_palette = app.palette()
+                # If text is lighter than background, we're likely in dark mode
+                bg_color = app_palette.color(QPalette.Window).lightness()
+                text_color = app_palette.color(QPalette.WindowText).lightness()
+                is_dark_mode = text_color > bg_color
+            except Exception as e:
+                print(f"Error using palette for theme detection: {e}")
+        
+        print(f"Dark mode detected: {is_dark_mode}")
+        
+        # Set PyQtGraph theme
+        if is_dark_mode:
+            pg.setConfigOption('background', 'k')
+            pg.setConfigOption('foreground', 'w')
+        else:
+            pg.setConfigOption('background', 'w')
+            pg.setConfigOption('foreground', 'k')
+    except ImportError:
+        print("PyQtGraph not available")
     
-    return default_theme
-
+    # Create and show the main window
+    main_window = MainWindow()
+    main_window.show()
+    
+    # Start the application
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    app.main()
+    main()
