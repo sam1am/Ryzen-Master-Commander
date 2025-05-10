@@ -226,5 +226,14 @@ class MainWindow(QMainWindow):
         self.graph_visible = not self.graph_visible
     
     def open_fan_profile_editor(self):
-        self.fan_editor = FanProfileEditor()
+        active_nbfc_profile = None
+        current_profile_text = self.current_profile_label.text() # e.g. "Current Profile: SomeProfileName"
+        
+        prefix = "Current Profile: "
+        if current_profile_text.startswith(prefix):
+            profile_name_part = current_profile_text[len(prefix):].strip()
+            if profile_name_part and profile_name_part != "--" and profile_name_part != "n/a":
+                active_nbfc_profile = profile_name_part
+                
+        self.fan_editor = FanProfileEditor(current_nbfc_profile_name=active_nbfc_profile)
         self.fan_editor.show()

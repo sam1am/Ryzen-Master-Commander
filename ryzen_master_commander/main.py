@@ -6,8 +6,11 @@ from ryzen_master_commander.app.main_window import MainWindow
 
 def main():
     # Create Qt application
+    # For Wayland/X11 icon and .desktop file association:
+    # Set the desktop file name (without .desktop extension)
+    QApplication.setDesktopFileName("ryzen-master-commander")
     app = QApplication(sys.argv)
-    app.setApplicationName("Ryzen Master Commander")
+    app.setApplicationName("ryzen-master-commander") # Match StartupWMClass and Icon name
     
     # Set application icon
     icon_paths = [
@@ -24,6 +27,7 @@ def main():
     # Configure PyQtGraph for dark/light mode
     try:
         import pyqtgraph as pg
+        import subprocess # Added for KDE theme detection
         # Check for KDE dark mode
         is_dark_mode = False
         

@@ -12,8 +12,9 @@ from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 
 class FanProfileEditor(QMainWindow):
-    def __init__(self):
+    def __init__(self, current_nbfc_profile_name=None):
         super().__init__()
+        self.current_nbfc_profile_name_from_main = current_nbfc_profile_name
         
         self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve points (temp, fan_speed)
         self.current_config = None  # Store the full config for saving
@@ -115,9 +116,25 @@ class FanProfileEditor(QMainWindow):
         # Initialize plot
         self.update_plot()
         
-        # Load a default profile if available
-        if self.profiles_list:
-            self.on_profile_selected(0)
+        # Determine initial profile to select in the dropdown
+        initial_profile_to_set = None
+        if self.current_nbfc_profile_name_from_main and \
+           self.current_nbfc_profile_name_from_main != "n/a" and \
+           self.current_nbfc_profile_name_from_main != "--":
+            if self.current_nbfc_profile_name_from_main in self.profiles_list:
+                initial_profile_to_set = self.current_nbfc_profile_name_from_main
+
+        if initial_profile_to_set:
+            try:
+                index = self.profiles_list.index(initial_profile_to_set)
+                self.profile_dropdown.setCurrentIndex(index)
+            except ValueError: # Should not happen if logic above is correct
+                if self.profiles_list: # Fallback to first if something unexpected occurs
+                    self.profile_dropdown.setCurrentIndex(0)
+        elif self.profiles_list: # Fallback if no current profile passed/found or it's "n/a"
+            self.profile_dropdown.setCurrentIndex(0)
+        # If self.profile_dropdown.setCurrentIndex() was called and changed the index,
+        # the on_profile_selected -> load_selected_profile chain will be triggered.
     
     def get_available_profiles(self):
         """Get list of available NBFC profiles"""
@@ -139,6 +156,7 @@ class FanProfileEditor(QMainWindow):
         profile_name = self.profile_dropdown.currentText()
         if not profile_name:
             return
+        self.custom_profile_name.setText(profile_name) # Pre-fill save name field
             
         # Try user directory first
         user_path = os.path.join(self.user_configs_dir, f"{profile_name}.json")

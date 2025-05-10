@@ -64,6 +64,45 @@ Project Structure:
 ```
 
 ---
+## File: polkit/com.merrythieves.ryzenadj.policy
+
+```policy
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC
+ "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
+<policyconfig>
+  <vendor>Ryzen Master Commander</vendor>
+  <vendor_url>https://github.com/sam1am/Ryzen-Master-Commander</vendor_url>
+
+  <action id="com.merrythieves.ryzenadj">
+    <description>Run ryzenadj with elevated privileges</description>
+    <message>Authentication is required to change processor settings</message>
+    <icon_name>cpu</icon_name>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/ryzenadj</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+  
+  <action id="com.merrythieves.nbfc">
+    <description>Run nbfc with elevated privileges</description>
+    <message>Authentication is required to control fan settings</message>
+    <icon_name>fan</icon_name>
+    <defaults>
+      <allow_any>auth_admin_keep</allow_any>
+      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/nbfc</annotate>
+    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
+  </action>
+</policyconfig>
+```
+---
 ## File: ryzen_master_commander/__init__.py
 
 ```py
@@ -545,12 +584,12 @@ class CombinedGraph(QWidget):
         left_axis.setTextPen(temp_color)
         
         # Setup right Y axis (Fan Speed)
+        self.plot_widget.showAxis('right') # Explicitly tell PlotItem to show the right axis
         right_axis = self.plot_widget.getAxis('right')
-        right_axis.setLabel(text='Fan Speed', units='%', color=fan_color)
+        right_axis.setLabel(text='Fan Speed', units='%', color=fan_color) # Set label
         right_axis.setPen(pg.mkPen(color=fan_color, width=2))
         right_axis.setTextPen(fan_color)
-        # IMPORTANT: Make sure right axis is showing values
-        right_axis.setStyle(showValues=True)
+        right_axis.setStyle(showValues=True) # Ensure tick values are shown
         # Add tick values for fan speed (0%, 25%, 50%, 75%, 100%)
         right_axis.setTicks([[(0, '0%'), (25, '25%'), (50, '50%'), (75, '75%'), (100, '100%')]])
         
@@ -560,9 +599,9 @@ class CombinedGraph(QWidget):
         
         # Create ViewBox for Fan Speed
         self.fan_view = pg.ViewBox()
-        self.plot_widget.scene().addItem(self.fan_view)
-        right_axis.linkToView(self.fan_view)
-        self.fan_view.setXLink(self.plot_widget.getViewBox())
+        self.plot_widget.scene().addItem(self.fan_view) # Add to scene
+        right_axis.linkToView(self.fan_view) # Link the axis to this view
+        self.fan_view.setXLink(self.plot_widget.getViewBox()) # Link X axes
         # Fix fan speed range to 0-100%
         self.fan_view.setYRange(0, 100, padding=0)
         
@@ -586,16 +625,18 @@ class CombinedGraph(QWidget):
             symbolSize=7,
             name="Fan Speed"
         )
-        self.fan_view.addItem(self.fan_curve)
+        self.fan_view.addItem(self.fan_curve) # Add to the fan_view
         
-        # Create better positioned legend
-        self.legend = pg.LegendItem(offset=(30, 20))
-        self.legend.setParentItem(self.plot_widget.graphicsItem())
+        # Create legend and position it below the graph
+        self.legend = pg.LegendItem() # Create instance without initial offset
+        self.legend.setParentItem(self.plot_widget.graphicsItem()) # Parent is PlotItem
+        # Anchor top-center of legend to bottom-center of plot item, with a 10px downward offset
+        self.legend.anchor(itemPos=(0.5, 0), parentPos=(0.5, 1), offset=(0, 10)) 
         
         # Add items to legend
         self.legend.addItem(self.temp_curve, "Temperature (°C)")
-        # Create a proxy item for fan speed
-        self.fan_proxy = pg.PlotDataItem(
+        # Create a proxy item for fan speed for the legend
+        self.fan_proxy = pg.PlotDataItem( # Use PlotDataItem for legend proxy if curve itself is complex
             pen=pg.mkPen(color=fan_color, width=3),
             symbolBrush=fan_color,
             symbolPen='w',
@@ -612,7 +653,13 @@ class CombinedGraph(QWidget):
         
     def updateViews(self):
         # Keep the views in sync when resizing
-        self.fan_view.setGeometry(self.plot_widget.getViewBox().sceneBoundingRect())
+        # The main ViewBox (getViewBox()) controls the geometry of the plot area
+        # The fan_view needs to match this geometry
+        main_vb_rect = self.plot_widget.getViewBox().sceneBoundingRect()
+        self.fan_view.setGeometry(main_vb_rect)
+        
+        # This call is important to sync the X-axis state (range, etc.)
+        # from the main ViewBox to the fan_view's X-axis.
         self.fan_view.linkedViewChanged(self.plot_widget.getViewBox(), self.fan_view.XAxis)
         
     def update_data(self, temperature, fan_speed):
@@ -651,27 +698,34 @@ class CombinedGraph(QWidget):
         if len(self.fanspeed_readings) > 60:
             self.fanspeed_readings = self.fanspeed_readings[-60:]
         
-        # Ensure both arrays have the same length
+        # Ensure all data arrays have the same length matching the shortest one
         min_len = min(len(self.time_points), len(self.temperature_readings), len(self.fanspeed_readings))
-        time_data = self.time_points[-min_len:]
-        temp_data = self.temperature_readings[-min_len:]
-        fan_data = self.fanspeed_readings[-min_len:]
+        if min_len == 0: # Avoid issues if no data yet
+            time_data, temp_data, fan_data = [], [], []
+        else:
+            time_data = self.time_points[-min_len:]
+            temp_data = self.temperature_readings[-min_len:]
+            fan_data = self.fanspeed_readings[-min_len:]
         
         # Update plot data
         self.temp_curve.setData(time_data, temp_data)
         self.fan_curve.setData(time_data, fan_data)
-        self.fan_proxy.setData(time_data, fan_data)  # Update the legend proxy
+        if self.fan_proxy: # Check if fan_proxy exists before setting data
+             self.fan_proxy.setData(time_data, fan_data)  # Update the legend proxy
         
         # Auto-scale temperature y-axis
         if temp_data:
             max_temp = max(temp_data) + 5
             min_temp = max(0, min(temp_data) - 5)
-            self.plot_widget.setYRange(min_temp, max(max_temp, 50))
-        
+            # Ensure max_temp is at least a reasonable value like 50, and min_temp is not negative
+            self.plot_widget.setYRange(min_temp, max(max_temp, 50.0)) 
+        else:
+            self.plot_widget.setYRange(0, 50) # Default if no data
+
         # Make sure the fan scale stays 0-100
         self.fan_view.setYRange(0, 100, padding=0)
         
-        # Update ViewBox to ensure correct sizing
+        # Update ViewBox to ensure correct sizing and linking
         self.updateViews()
 ```
 ---
@@ -718,7 +772,7 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         # Set window properties
         self.setWindowTitle("Ryzen Master Commander")
-        self.resize(900, 600)
+        self.resize(900, 700)
         
         # Create central widget
         central_widget = QWidget()
@@ -750,7 +804,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(controls_container)
         
         # Set initial sizes for splitter
-        splitter.setSizes([200, 400])
+        splitter.setSizes([380, 320])
         
         # Create TDP Controls group box
         tdp_group = QGroupBox("TDP Controls")
@@ -1256,5 +1310,88 @@ def main():
 
 if __name__ == "__main__":
     main()
+```
+---
+## File: setup.py
+
+```py
+from setuptools import setup, find_packages
+import os
+
+# Get the absolute path to the directory where setup.py is located
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Define proper paths based on setup.py location
+fan_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/fan_profiles')
+tdp_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/tdp_profiles')
+
+# Create data files structure properly
+# Add this to your data_files list in setup.py
+data_files = [
+    ('share/applications', [os.path.join(BASE_DIR, 'share/applications/ryzen-master-commander.desktop')]),
+    ('share/ryzen-master-commander/fan_profiles', 
+     [os.path.join(fan_profiles_path, file) for file in os.listdir(fan_profiles_path) if os.path.isfile(os.path.join(fan_profiles_path, file))]),
+    ('share/ryzen-master-commander/tdp_profiles', 
+     [os.path.join(tdp_profiles_path, file) for file in os.listdir(tdp_profiles_path) if os.path.isfile(os.path.join(tdp_profiles_path, file))]),
+    ('bin', [os.path.join(BASE_DIR, 'bin/ryzen-master-commander'), 
+             os.path.join(BASE_DIR, 'bin/ryzen-master-commander-helper')]),
+    # Add this line for the polkit policy
+    ('share/polkit-1/actions', [os.path.join(BASE_DIR, 'polkit/com.merrythieves.ryzenadj.policy')]),
+]
+
+# Add icon files
+for size in ['16x16', '32x32', '64x64', '128x128']:
+    icon_dir = os.path.join(BASE_DIR, f'share/icons/hicolor/{size}/apps')
+    if os.path.exists(icon_dir):
+        data_files.append((f'share/icons/hicolor/{size}/apps', 
+                          [os.path.join(icon_dir, 'ryzen-master-commander.png')]))
+
+setup(
+    name="ryzen-master-commander",
+    version="1.0.1",
+    author="sam1am",
+    author_email="noreply@merrythieves.com",
+    description="TDP and fan control for AMD Ryzen processors",
+    url="https://github.com/sam1am/Ryzen-Master-Commander",
+    packages=['ryzen_master_commander', 'ryzen_master_commander.app'],
+    include_package_data=True,
+    classifiers=[
+        "Programming Language :: Python :: 3",
+        "License :: OSI Approved :: MIT License",
+        "Operating System :: POSIX :: Linux",
+    ],
+    install_requires=[
+        "PyQt5",
+        "pyqtgraph",
+        "numpy",
+        "Pillow",
+        "pystray",
+    ],
+    python_requires=">=3.6",
+    data_files=data_files,
+    entry_points={
+        'console_scripts': [
+            'ryzen-master-commander=ryzen_master_commander.main:main',
+        ],
+    },
+)
+```
+---
+## File: share/applications/ryzen-master-commander.desktop
+
+```desktop
+[Desktop Entry]
+Name=Ryzen Master Commander
+Comment=AMD Ryzen TDP and Fan Control
+GenericName=Hardware Control
+Exec=ryzen-master-commander %U
+Icon=ryzen-master-commander
+Terminal=false
+Type=Application
+Categories=System;Settings;HardwareSettings;
+Keywords=AMD;Ryzen;TDP;Fan;Control;
+StartupNotify=true
+StartupWMClass=ryzen-master-commander
+Path=/usr/share/ryzen-master-commander
 ```
 ---
