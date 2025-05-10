@@ -1,5 +1,5 @@
 cd ~/github/Ryzen-Master-Commander
-tar -czf builds/ryzen-master-commander/ryzen-master-commander-1.0.3.tar.gz --exclude='.git' --exclude='builds' .
+tar -czf builds/ryzen-master-commander/ryzen-master-commander-1.0.4.tar.gz --exclude='.git' --exclude='builds' .
 
 cd builds/ryzen-master-commander
 rm -rf pkg src
