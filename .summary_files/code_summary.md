@@ -79,22 +79,27 @@ Project Structure:
 ## File: ryzen_master_commander/app/fan_profile_editor.py
 
 ```py
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-import json
 import os
-import subprocess
-from tkinter import filedialog, messagebox
-import numpy as np
 import glob
+import json
+import subprocess
+import numpy as np
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
+                            QLabel, QComboBox, QPushButton, QLineEdit, QMessageBox)
+from PyQt5.QtCore import Qt
 
-class FanProfileEditor:
-    def __init__(self, parent):
-        self.parent = parent
+import matplotlib.pyplot as plt
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.figure import Figure
+
+class FanProfileEditor(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        
         self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve points (temp, fan_speed)
         self.current_config = None  # Store the full config for saving
+        self.hover_point = None
+        self.drag_point = None
         
         # NBFC configs directory
         self.nbfc_configs_dir = "/usr/share/nbfc/configs/"
@@ -104,109 +109,115 @@ class FanProfileEditor:
         if not os.path.exists(self.user_configs_dir):
             os.makedirs(self.user_configs_dir, exist_ok=True)
         
-        # Main frame
-        self.main_frame = ttk.Frame(parent)
-        self.main_frame.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        self.init_ui()
+    
+    def init_ui(self):
+        self.setWindowTitle("NBFC Fan Profile Editor")
+        self.resize(800, 600)
+        
+        # Create central widget and main layout
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        main_layout = QVBoxLayout(central_widget)
         
         # Title
-        title_label = ttk.Label(self.main_frame, text="NBFC Fan Profile Editor", font=("Helvetica", 16, "bold"))
-        title_label.pack(pady=(0, 10))
+        title_label = QLabel("NBFC Fan Profile Editor")
+        title_label.setAlignment(Qt.AlignCenter)
+        font = title_label.font()
+        font.setPointSize(16)
+        font.setBold(True)
+        title_label.setFont(font)
+        main_layout.addWidget(title_label)
         
         # Available profiles frame
-        profiles_frame = ttk.LabelFrame(self.main_frame, text="Available Profiles")
-        profiles_frame.pack(fill=X, pady=10)
+        profiles_group = QGroupBox("Available Profiles")
+        profiles_layout = QHBoxLayout(profiles_group)
         
-        # Profile selection
+        profiles_layout.addWidget(QLabel("Select Profile:"))
+        
         self.profiles_list = self.get_available_profiles()
-        profile_label = ttk.Label(profiles_frame, text="Select Profile:")
-        profile_label.pack(side=LEFT, padx=5, pady=5)
+        self.profile_dropdown = QComboBox()
+        self.profile_dropdown.addItems(self.profiles_list)
+        self.profile_dropdown.currentIndexChanged.connect(self.on_profile_selected)
+        profiles_layout.addWidget(self.profile_dropdown, 1)
         
-        self.profile_var = ttk.StringVar()
-        profile_combobox = ttk.Combobox(profiles_frame, textvariable=self.profile_var, 
-                                        values=self.profiles_list, width=40)
-        profile_combobox.pack(side=LEFT, fill=X, expand=True, padx=5, pady=5)
-        profile_combobox.bind("<<ComboboxSelected>>", self.on_profile_selected)
+        load_btn = QPushButton("Load")
+        load_btn.clicked.connect(self.load_selected_profile)
+        profiles_layout.addWidget(load_btn)
         
-        load_btn = ttk.Button(profiles_frame, text="Load", command=self.load_selected_profile)
-        load_btn.pack(side=LEFT, padx=5, pady=5)
+        apply_btn = QPushButton("Apply")
+        apply_btn.clicked.connect(self.apply_selected_profile)
+        profiles_layout.addWidget(apply_btn)
         
-        apply_btn = ttk.Button(profiles_frame, text="Apply", command=self.apply_selected_profile)
-        apply_btn.pack(side=LEFT, padx=5, pady=5)
+        main_layout.addWidget(profiles_group)
         
-        # Create the figure and plot
-        self.fig, self.ax = plt.subplots(figsize=(6, 4))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.main_frame)
-        self.canvas_widget = self.canvas.get_tk_widget()
-        self.canvas_widget.pack(fill=BOTH, expand=True)
-        
-        # Connect mouse events
+        # Matplotlib figure for plotting
+        self.fig = Figure(figsize=(6, 4), dpi=100)
+        self.ax = self.fig.add_subplot(111)
+        self.canvas = FigureCanvas(self.fig)
         self.canvas.mpl_connect('button_press_event', self.on_click)
         self.canvas.mpl_connect('motion_notify_event', self.on_hover)
         self.canvas.mpl_connect('button_release_event', self.on_release)
+        main_layout.addWidget(self.canvas)
         
-        # Active point for dragging
-        self.hover_point = None
-        self.drag_point = None
+        # Controls for curve manipulation
+        controls_group = QGroupBox("Curve Controls")
+        controls_layout = QHBoxLayout(controls_group)
         
-        # Add controls frame
-        controls_frame = ttk.Frame(self.main_frame)
-        controls_frame.pack(fill=X, pady=10)
+        add_point_btn = QPushButton("Add Point")
+        add_point_btn.clicked.connect(self.add_point)
+        controls_layout.addWidget(add_point_btn)
         
-        # Add point button
-        add_point_btn = ttk.Button(controls_frame, text="Add Point", command=self.add_point)
-        add_point_btn.pack(side=LEFT, padx=5)
+        remove_point_btn = QPushButton("Remove Point")
+        remove_point_btn.clicked.connect(self.remove_point)
+        controls_layout.addWidget(remove_point_btn)
         
-        # Remove point button
-        remove_point_btn = ttk.Button(controls_frame, text="Remove Point", command=self.remove_point)
-        remove_point_btn.pack(side=LEFT, padx=5)
+        reset_btn = QPushButton("Reset")
+        reset_btn.clicked.connect(self.reset_curve)
+        controls_layout.addWidget(reset_btn)
         
-        # Reset button
-        reset_btn = ttk.Button(controls_frame, text="Reset", command=self.reset_curve)
-        reset_btn.pack(side=LEFT, padx=5)
+        main_layout.addWidget(controls_group)
         
-        # Save frame
-        save_frame = ttk.LabelFrame(self.main_frame, text="Save Profile")
-        save_frame.pack(fill=X, pady=10)
+        # Save profile section
+        save_group = QGroupBox("Save Profile")
+        save_layout = QHBoxLayout(save_group)
         
-        # Profile name entry
-        name_label = ttk.Label(save_frame, text="Profile Name:")
-        name_label.pack(side=LEFT, padx=5, pady=5)
+        save_layout.addWidget(QLabel("Profile Name:"))
         
-        self.custom_profile_name = ttk.StringVar(value="MyCustomProfile")
-        name_entry = ttk.Entry(save_frame, textvariable=self.custom_profile_name, width=30)
-        name_entry.pack(side=LEFT, fill=X, expand=True, padx=5, pady=5)
+        self.custom_profile_name = QLineEdit("MyCustomProfile")
+        save_layout.addWidget(self.custom_profile_name, 1)
         
-        save_btn = ttk.Button(save_frame, text="Save Custom Profile", command=self.save_custom_profile)
-        save_btn.pack(side=LEFT, padx=5, pady=5)
+        save_btn = QPushButton("Save Custom Profile")
+        save_btn.clicked.connect(self.save_custom_profile)
+        save_layout.addWidget(save_btn)
+        
+        main_layout.addWidget(save_group)
         
         # Initialize plot
         self.update_plot()
         
         # Load a default profile if available
         if self.profiles_list:
-            self.profile_var.set(self.profiles_list[0])
+            self.on_profile_selected(0)
     
     def get_available_profiles(self):
         """Get list of available NBFC profiles"""
         # Check system profiles
         system_profiles = glob.glob(os.path.join(self.nbfc_configs_dir, "*.json"))
         
-        # Check user profiles
-        # user_profiles = glob.glob(os.path.join(self.user_configs_dir, "*.json"))
-        
-        # Combine and extract names
-        all_profiles = system_profiles
-        profile_names = [os.path.splitext(os.path.basename(p))[0] for p in all_profiles]
+        # Extract names
+        profile_names = [os.path.splitext(os.path.basename(p))[0] for p in system_profiles]
         
         return sorted(profile_names)
     
-    def on_profile_selected(self, event):
+    def on_profile_selected(self, index):
         """Handle profile selection from dropdown"""
-        self.load_selected_profile()
+        if index >= 0:
+            self.load_selected_profile()
     
     def load_selected_profile(self):
         """Load the currently selected profile"""
-        profile_name = self.profile_var.get()
+        profile_name = self.profile_dropdown.currentText()
         if not profile_name:
             return
             
@@ -219,7 +230,7 @@ class FanProfileEditor:
         elif os.path.exists(system_path):
             file_path = system_path
         else:
-            messagebox.showerror("Error", f"Profile '{profile_name}' not found")
+            QMessageBox.critical(self, "Error", f"Profile '{profile_name}' not found")
             return
             
         try:
@@ -266,51 +277,37 @@ class FanProfileEditor:
                     # Use the extracted points
                     self.points = curve_points
                     self.update_plot()
-                    messagebox.showinfo("Success", f"Loaded fan curve from '{profile_name}'")
+                    # QMessageBox.information(self, "Success", f"Loaded fan curve from '{profile_name}'")
                 else:
                     # No points found, create default
                     self.reset_curve()
-                    messagebox.showinfo("Note", "No fan curve found, using default curve")
+                    QMessageBox.information(self, "Note", "No fan curve found, using default curve")
             else:
-                messagebox.showwarning("Warning", "Selected profile doesn't contain fan configuration")
+                QMessageBox.warning(self, "Warning", "Selected profile doesn't contain fan configuration")
                 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load profile: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to load profile: {str(e)}")
             self.reset_curve()
     
     def apply_selected_profile(self):
         """Apply the selected profile using nbfc command"""
-        profile_name = self.profile_var.get()
+        profile_name = self.profile_dropdown.currentText()
         if not profile_name:
-            messagebox.showwarning("Warning", "Please select a profile first")
+            QMessageBox.warning(self, "Warning", "Please select a profile first")
             return
             
         try:
-            # Use the correct command format, without including quotes in the string
-            # subprocess handles spaces in arguments correctly when using a list
             subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True)
-            
-            # For debugging, log the exact command
-            print(f"Executing: pkexec nbfc config -a '{profile_name}'")
-            
-            messagebox.showinfo("Success", f"Applied fan profile '{profile_name}'")
+            QMessageBox.information(self, "Success", f"Applied fan profile '{profile_name}'")
         except subprocess.CalledProcessError as e:
-            # Enhanced error message with the command that was run
             error_msg = f"Command failed: pkexec nbfc config -a '{profile_name}'\nError: {str(e)}"
-            messagebox.showerror("Error", error_msg)
-            
-            # Try getting help output for debugging
-            try:
-                help_output = subprocess.check_output(['nbfc', 'config', '--help'], text=True)
-                print(f"NBFC config help:\n{help_output}")
-            except:
-                pass
+            QMessageBox.critical(self, "Error", error_msg)
     
     def save_custom_profile(self):
         """Save the current fan curve as a custom NBFC profile with root privileges"""
-        name = self.custom_profile_name.get()
+        name = self.custom_profile_name.text()
         if not name:
-            messagebox.showwarning("Warning", "Please enter a profile name")
+            QMessageBox.warning(self, "Warning", "Please enter a profile name")
             return
                 
         # Start with a template or use current loaded config as base
@@ -370,30 +367,22 @@ class FanProfileEditor:
                 'pkexec', 'cp', temp_file, target_file
             ], check=True)
             
-            messagebox.showinfo("Success", f"Saved profile to {target_file}")
+            QMessageBox.information(self, "Success", f"Saved profile to {target_file}")
             
             # Update the profile list
-            self.profiles_list = self.get_available_profiles()
-            
-            # Rather than trying to find the combobox widget directly, create a variable 
-            # at initialization time to store it, or simply refresh the entire UI
             self.refresh_ui()
             
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save profile: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to save profile: {str(e)}")
 
     def refresh_ui(self):
         """Refresh the profile list in the UI"""
         # Get updated profile list
         self.profiles_list = self.get_available_profiles()
         
-        # Find all combobox widgets and update them
-        for child in self.main_frame.winfo_children():
-            if isinstance(child, ttk.Labelframe) and child.cget("text") == "Available Profiles":
-                for widget in child.winfo_children():
-                    if isinstance(widget, ttk.Combobox):
-                        widget['values'] = self.profiles_list
-                        return
+        # Update dropdown
+        self.profile_dropdown.clear()
+        self.profile_dropdown.addItems(self.profiles_list)
     
     def update_plot(self):
         self.ax.clear()
@@ -422,6 +411,7 @@ class FanProfileEditor:
         self.ax.set_title('Fan Speed Curve')
         
         # Draw the plot
+        self.fig.tight_layout()
         self.canvas.draw()
     
     def on_click(self, event):
@@ -439,7 +429,7 @@ class FanProfileEditor:
                         self.points.pop(i)
                         self.update_plot()
                     else:
-                        messagebox.showinfo("Can't Remove", "Fan curve must have at least 2 points")
+                        QMessageBox.information(self, "Can't Remove", "Fan curve must have at least 2 points")
                     return
         
         # If double click and not on point, add new point
@@ -502,7 +492,8 @@ class FanProfileEditor:
             self.hover_point = None
             self.update_plot()
         else:
-            messagebox.showinfo("Remove Point", "Hover over a point to select it first, or fan curve must have at least 2 points")
+            QMessageBox.information(self, "Remove Point", 
+                                    "Hover over a point to select it first, or fan curve must have at least 2 points")
     
     def reset_curve(self):
         self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve
@@ -512,334 +503,426 @@ class FanProfileEditor:
 ## File: ryzen_master_commander/app/graphs.py
 
 ```py
-import ttkbootstrap as ttk
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from PyQt5.QtWidgets import QWidget, QVBoxLayout
+from PyQt5.QtCore import Qt
+from PyQt5.QtGui import QFont, QColor, QPen
+import pyqtgraph as pg
+import numpy as np
 
-class TemperatureGraph:
-    def __init__(self, root):
-        self.root = root
+class CombinedGraph(QWidget):
+    def __init__(self, parent=None):
+        super(CombinedGraph, self).__init__(parent)
         self.temperature_readings = []
+        self.fanspeed_readings = []
+        self.time_points = []
         
-        # Set matplotlib to not use its own window
-        import matplotlib
-        matplotlib.use('TkAgg')
+        # Configure global PyQtGraph settings
+        pg.setConfigOptions(antialias=True)
         
-        # Create figure with proper embedding settings
-        self.fig, self.ax = plt.subplots(figsize=(6, 1.5))
-        self.fig.patch.set_facecolor('none')  # Transparent background
+        # Create layout
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
         
-        # Create canvas and explicitly set master
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack(fill='both', expand=True)
+        # Create PlotWidget - use transparent background to respect app theme
+        self.plot_widget = pg.PlotWidget(background=None)
+        layout.addWidget(self.plot_widget)
         
-        self.canvas.draw()
-        plt.close(self.fig)  # Close the figure manager but keep the canvas
-
-    def update_temperature(self, temperature):
+        # Setup the plot
+        self.setup_plot()
+        
+    def setup_plot(self):
+        # Enable grid
+        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
+        
+        # Define colors for temperature and fan speed
+        temp_color = '#3498db'  # Blue
+        fan_color = '#e74c3c'   # Red
+        
+        # Setup left Y axis (Temperature)
+        left_axis = self.plot_widget.getAxis('left')
+        left_axis.setLabel(text='Temperature', units='°C', color=temp_color)
+        left_axis.setPen(pg.mkPen(color=temp_color, width=2))
+        left_axis.setTextPen(temp_color)
+        
+        # Setup right Y axis (Fan Speed)
+        right_axis = self.plot_widget.getAxis('right')
+        right_axis.setLabel(text='Fan Speed', units='%', color=fan_color)
+        right_axis.setPen(pg.mkPen(color=fan_color, width=2))
+        right_axis.setTextPen(fan_color)
+        # IMPORTANT: Make sure right axis is showing values
+        right_axis.setStyle(showValues=True)
+        # Add tick values for fan speed (0%, 25%, 50%, 75%, 100%)
+        right_axis.setTicks([[(0, '0%'), (25, '25%'), (50, '50%'), (75, '75%'), (100, '100%')]])
+        
+        # Setup bottom X axis (Time)
+        bottom_axis = self.plot_widget.getAxis('bottom')
+        bottom_axis.setLabel('Time (seconds)')
+        
+        # Create ViewBox for Fan Speed
+        self.fan_view = pg.ViewBox()
+        self.plot_widget.scene().addItem(self.fan_view)
+        right_axis.linkToView(self.fan_view)
+        self.fan_view.setXLink(self.plot_widget.getViewBox())
+        # Fix fan speed range to 0-100%
+        self.fan_view.setYRange(0, 100, padding=0)
+        
+        # Create temperature plot
+        self.temp_curve = pg.PlotCurveItem(
+            pen=pg.mkPen(color=temp_color, width=3),
+            symbolBrush=temp_color,
+            symbolPen='w',
+            symbol='o',
+            symbolSize=7,
+            name="Temperature"
+        )
+        self.plot_widget.addItem(self.temp_curve)
+        
+        # Create fan speed plot (on secondary y-axis)
+        self.fan_curve = pg.PlotCurveItem(
+            pen=pg.mkPen(color=fan_color, width=3),
+            symbolBrush=fan_color,
+            symbolPen='w',
+            symbol='s',
+            symbolSize=7,
+            name="Fan Speed"
+        )
+        self.fan_view.addItem(self.fan_curve)
+        
+        # Create better positioned legend
+        self.legend = pg.LegendItem(offset=(30, 20))
+        self.legend.setParentItem(self.plot_widget.graphicsItem())
+        
+        # Add items to legend
+        self.legend.addItem(self.temp_curve, "Temperature (°C)")
+        # Create a proxy item for fan speed
+        self.fan_proxy = pg.PlotDataItem(
+            pen=pg.mkPen(color=fan_color, width=3),
+            symbolBrush=fan_color,
+            symbolPen='w',
+            symbol='s',
+            symbolSize=7
+        )
+        self.legend.addItem(self.fan_proxy, "Fan Speed (%)")
+        
+        # Connect resize event to update views and ensure sync
+        self.plot_widget.getViewBox().sigResized.connect(self.updateViews)
+        
+        # Update views initially
+        self.updateViews()
+        
+    def updateViews(self):
+        # Keep the views in sync when resizing
+        self.fan_view.setGeometry(self.plot_widget.getViewBox().sceneBoundingRect())
+        self.fan_view.linkedViewChanged(self.plot_widget.getViewBox(), self.fan_view.XAxis)
+        
+    def update_data(self, temperature, fan_speed):
+        if temperature == "n/a" and fan_speed == "n/a":
+            return
+        
+        # Add current time (seconds since start)
+        if not self.time_points:
+            self.time_points.append(0)
+        else:
+            self.time_points.append(self.time_points[-1] + 1)
+        
+        # Keep only the last 60 points
+        if len(self.time_points) > 60:
+            self.time_points = self.time_points[-60:]
+        
+        # Update temperature data
         if temperature != "n/a":
             self.temperature_readings.append(float(temperature))
-            self.temperature_readings = self.temperature_readings[-600:]
-            self.ax.clear()
-            self.ax.plot(self.temperature_readings, marker='o', color='b')
-            self.ax.set_title('Temperature Over Time')
-            self.ax.set_ylabel('Temperature (°C)')
-            self.ax.set_xlabel('Reading')
-            self.ax.grid(True)
-            self.canvas.draw()
-
-class FanSpeedGraph:
-    def __init__(self, root):
-        self.root = root
-        self.fanspeed_readings = []
-        self.fig, self.ax = plt.subplots(figsize=(6, 1.5))
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.root)
-        self.canvas.get_tk_widget().pack()
-
-    def update_fan_speed(self, fan_speed):
+        else:
+            # If no reading, use the previous value or zero
+            self.temperature_readings.append(self.temperature_readings[-1] if self.temperature_readings else 0)
+            
+        # Keep only the last 60 points
+        if len(self.temperature_readings) > 60:
+            self.temperature_readings = self.temperature_readings[-60:]
+        
+        # Update fan speed data
         if fan_speed != "n/a":
             self.fanspeed_readings.append(float(fan_speed))
-            if len(self.fanspeed_readings) > 600:
-                self.fanspeed_readings.pop(0)
-            self.ax.clear()
-            self.ax.plot(self.fanspeed_readings, marker='o', color='r')
-            self.ax.set_title('Fan Speed Over Time')
-            self.ax.set_ylabel('Fan Speed (%)')
-            self.ax.set_xlabel('Reading')
-            self.ax.set_ylim(0, 100)
-            self.ax.grid(True)
-            self.canvas.draw()
+        else:
+            # If no reading, use the previous value or zero
+            self.fanspeed_readings.append(self.fanspeed_readings[-1] if self.fanspeed_readings else 0)
+            
+        # Keep only the last 60 points
+        if len(self.fanspeed_readings) > 60:
+            self.fanspeed_readings = self.fanspeed_readings[-60:]
+        
+        # Ensure both arrays have the same length
+        min_len = min(len(self.time_points), len(self.temperature_readings), len(self.fanspeed_readings))
+        time_data = self.time_points[-min_len:]
+        temp_data = self.temperature_readings[-min_len:]
+        fan_data = self.fanspeed_readings[-min_len:]
+        
+        # Update plot data
+        self.temp_curve.setData(time_data, temp_data)
+        self.fan_curve.setData(time_data, fan_data)
+        self.fan_proxy.setData(time_data, fan_data)  # Update the legend proxy
+        
+        # Auto-scale temperature y-axis
+        if temp_data:
+            max_temp = max(temp_data) + 5
+            min_temp = max(0, min(temp_data) - 5)
+            self.plot_widget.setYRange(min_temp, max(max_temp, 50))
+        
+        # Make sure the fan scale stays 0-100
+        self.fan_view.setYRange(0, 100, padding=0)
+        
+        # Update ViewBox to ensure correct sizing
+        self.updateViews()
 ```
 ---
 ## File: ryzen_master_commander/app/main_window.py
 
 ```py
-import ttkbootstrap as ttk
-from ttkbootstrap.constants import *
-from tkinter.simpledialog import askstring
 import os
 import subprocess
-from ryzen_master_commander.app.graphs import TemperatureGraph, FanSpeedGraph
-from ryzen_master_commander.app.system_utils import get_system_readings
+from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
+                            QSlider, QComboBox, QGroupBox, QCheckBox, QPushButton, 
+                            QRadioButton, QStatusBar, QFrame, QSplitter, QApplication)
+from PyQt5.QtCore import Qt, QTimer, pyqtSlot
+from PyQt5.QtGui import QFont
+
+from ryzen_master_commander.app.graphs import CombinedGraph
+from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
 from ryzen_master_commander.app.profile_manager import ProfileManager
 from ryzen_master_commander.app.fan_profile_editor import FanProfileEditor
 
-class MainWindow:
-    def __init__(self, root):
-        self.root = root
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
         
-        # The rest of your initialization code
-        self.graph_visible = True
-        self.graph_frame = None
-        self.profile_manager = ProfileManager(self.root)
+        # Initialize instance variables
+        self.profile_manager = ProfileManager()
         self.fan_speed_adjustment_delay = None
-
-        self.control_mode_var = ttk.StringVar(value='auto')
-
-        # Create widgets in the provided root window
-        self.create_widgets()
+        self.graph_visible = True
+        
+        # Set up the UI
+        self.init_ui()
+        
+        # Set auto control by default
+        self.radio_auto_control.setChecked(True)
         self.set_auto_control()
-        # Delay the first reading to allow window to appear
-        self.root.after(1000, self.update_readings)
-
-    def create_widgets(self):
-        # Create main frame, canvas, and scrollbar
-        main_frame = ttk.Frame(self.root)
-        main_frame.pack(fill=ttk.BOTH, expand=True)
-
-        canvas = ttk.Canvas(main_frame)
-        canvas.pack(side=ttk.LEFT, fill=ttk.BOTH, expand=True)
-
-        scrollbar = ttk.Scrollbar(main_frame, orient=ttk.VERTICAL, command=canvas.yview)
-        scrollbar.pack(side=ttk.RIGHT, fill=ttk.Y)
-
-        canvas.configure(yscrollcommand=scrollbar.set)
-        canvas.bind('<Configure>', lambda e: canvas.configure(scrollregion=canvas.bbox('all')))
-
-        content_frame = ttk.Frame(canvas)
-        canvas.create_window((0, 0), window=content_frame, anchor='nw')
-
-        # Create a frame for the graph with a specific width
-        self.graph_frame = ttk.Frame(content_frame, height=400,width=300)  # Set the desired width here
-        self.graph_frame.pack_propagate(False)  # Prevent the frame from shrinking
-
-        # Create temperature graph
-        self.temperature_graph = TemperatureGraph(self.graph_frame)
-
-        # Create fan speed graph
-        self.fan_speed_graph = FanSpeedGraph(self.graph_frame)
-
-        # Create temperature label
-        self.temp_label = ttk.Label(content_frame, text="Temperature: ")
-        self.temp_label.pack(pady=5)
-
-        # Curent profile label
-        self.current_profile_label = ttk.Label(content_frame, text="Current Profile: ")
-        self.current_profile_label.pack(pady=5)
-
-        # Create fan speed label
-        self.fan_speed_label = ttk.Label(content_frame, text="Fan Speed: ")
-        self.fan_speed_label.pack(pady=5)
-
-        # Create a separator
-        separator = ttk.Separator(content_frame, orient='horizontal')
-        separator.pack(fill='x', pady=10)
-
-        # Create a frame to center the content below the graph
-        center_frame = ttk.Frame(content_frame)
-        center_frame.pack(pady=10)
-
-        # Create fan controls
-        fan_controls_label = ttk.Label(center_frame, text="Fan Controls", font=("Helvetica", 14, "bold"))
-        fan_controls_label.pack(pady=5)
-
-        fan_profile_editor_btn = ttk.Button(center_frame, text="Fan Profile Editor", command=self.open_fan_profile_editor)
-        fan_profile_editor_btn.pack(pady=10)
-
-        refresh_label = ttk.Label(center_frame, text="Refresh Interval (seconds): ")
-        refresh_label.pack(pady=5)
-        self.refresh_slider = ttk.Scale(center_frame, from_=1, to_=30, orient='horizontal', length=300)
-        self.refresh_slider.pack(pady=(0, 5))
-        self.refresh_slider.set(5)
-
-        manual_control_label = ttk.Label(center_frame, text="Manual Fan Speed (%): ")
-        manual_control_label.pack(pady=5)
-        self.fan_speed_control_slider = ttk.Scale(center_frame, from_=0, to_=100, orient='horizontal', length=300, command=self.delayed_fan_setting)
-        self.fan_speed_control_slider.pack(pady=(0, 5))
-        self.fan_speed_control_slider.set(50)
-
-        self.manual_control_value_label = ttk.Label(center_frame, text="50%")
-        self.manual_control_value_label.pack(pady=(0, 10))
-
-        control_mode_frame = ttk.Frame(center_frame)
-        control_mode_frame.pack(pady=5)
-        self.radio_auto_control = ttk.Radiobutton(control_mode_frame, text='Auto Control', 
-                                                value='auto', variable=self.control_mode_var, 
-                                                command=self.set_auto_control)
-        self.radio_auto_control.grid(row=0, column=0, padx=5)
-        self.radio_manual_control = ttk.Radiobutton(control_mode_frame, text='Manual Control', 
-                                                value='manual', variable=self.control_mode_var, 
-                                                command=self.set_manual_control)
-        self.radio_manual_control.grid(row=0, column=1, padx=5)
-
-        # Create a button to toggle graph visibility
-        self.graph_button = ttk.Button(content_frame, text="Show Graph", command=self.toggle_graph)
-        self.graph_button.pack(pady=5)
-
-        # Create TDP controls
-        separator = ttk.Separator(center_frame, orient='horizontal')
-        separator.pack(fill='x', pady=10)
-
-        tdp_controls_label = ttk.Label(center_frame, text="TDP Controls", font=("Helvetica", 14, "bold"))
-        tdp_controls_label.pack(pady=5)
-
-        self.profile_manager.create_widgets(center_frame)
-        # self.setup_system_tray()
-
+        
+        # Start reading system values
+        self.refresh_timer = QTimer(self)
+        self.refresh_timer.timeout.connect(self.update_readings)
+        self.refresh_timer.start(5000)  # Initial refresh every 5 seconds
+        
+        # Schedule first reading
+        QTimer.singleShot(1000, self.update_readings)
+    
+    def init_ui(self):
+        # Set window properties
+        self.setWindowTitle("Ryzen Master Commander")
+        self.resize(900, 600)
+        
+        # Create central widget
+        central_widget = QWidget()
+        self.setCentralWidget(central_widget)
+        
+        # Main layout
+        main_layout = QVBoxLayout(central_widget)
+        
+        # Create splitter for graphs and controls
+        splitter = QSplitter(Qt.Vertical)
+        main_layout.addWidget(splitter, 1)
+        
+        # Create graph widget
+        self.graph_widget = QWidget()
+        graph_layout = QVBoxLayout(self.graph_widget)
+        
+        # Add combined graph
+        graph_group = QGroupBox("System Monitoring")
+        graph_inner_layout = QVBoxLayout(graph_group)
+        self.combined_graph = CombinedGraph(self)
+        graph_inner_layout.addWidget(self.combined_graph)
+        graph_layout.addWidget(graph_group)
+        
+        splitter.addWidget(self.graph_widget)
+        
+        # Controls container
+        controls_container = QWidget()
+        controls_layout = QHBoxLayout(controls_container)
+        splitter.addWidget(controls_container)
+        
+        # Set initial sizes for splitter
+        splitter.setSizes([200, 400])
+        
+        # Create TDP Controls group box
+        tdp_group = QGroupBox("TDP Controls")
+        tdp_layout = QVBoxLayout(tdp_group)
+        self.profile_manager.create_widgets(tdp_group)
+        controls_layout.addWidget(tdp_group)
+        
+        # Create Fan Controls group box
+        fan_group = QGroupBox("Fan Controls")
+        fan_layout = QVBoxLayout(fan_group)
+        
+        # Fan profile editor button
+        fan_profile_editor_btn = QPushButton("Fan Profile Editor")
+        fan_profile_editor_btn.clicked.connect(self.open_fan_profile_editor)
+        fan_layout.addWidget(fan_profile_editor_btn)
+        
+        # Refresh interval slider
+        refresh_label = QLabel("Refresh Interval (seconds):")
+        fan_layout.addWidget(refresh_label)
+        
+        self.refresh_slider = QSlider(Qt.Horizontal)
+        self.refresh_slider.setRange(1, 30)
+        self.refresh_slider.setValue(5)
+        self.refresh_slider.setTickPosition(QSlider.TicksBelow)
+        self.refresh_slider.setTickInterval(5)
+        self.refresh_slider.valueChanged.connect(self.update_refresh_interval)
+        fan_layout.addWidget(self.refresh_slider)
+        
+        refresh_value_layout = QHBoxLayout()
+        refresh_value_layout.addWidget(QLabel("1"))
+        refresh_value_layout.addStretch()
+        refresh_value_layout.addWidget(QLabel("30"))
+        fan_layout.addLayout(refresh_value_layout)
+        
+        # Fan control mode
+        control_mode_group = QGroupBox("Fan Control Mode")
+        control_mode_layout = QHBoxLayout(control_mode_group)
+        
+        self.radio_auto_control = QRadioButton("Auto Control")
+        self.radio_auto_control.toggled.connect(self.set_auto_control)
+        control_mode_layout.addWidget(self.radio_auto_control)
+        
+        self.radio_manual_control = QRadioButton("Manual Control")
+        self.radio_manual_control.toggled.connect(self.set_manual_control)
+        control_mode_layout.addWidget(self.radio_manual_control)
+        
+        fan_layout.addWidget(control_mode_group)
+        
+        # Manual fan speed slider
+        manual_control_label = QLabel("Manual Fan Speed (%):")
+        fan_layout.addWidget(manual_control_label)
+        
+        self.fan_speed_control_slider = QSlider(Qt.Horizontal)
+        self.fan_speed_control_slider.setRange(0, 100)
+        self.fan_speed_control_slider.setValue(50)
+        self.fan_speed_control_slider.setTickPosition(QSlider.TicksBelow)
+        self.fan_speed_control_slider.setTickInterval(10)
+        self.fan_speed_control_slider.valueChanged.connect(self.delayed_fan_setting)
+        self.fan_speed_control_slider.setEnabled(False)  # Disabled by default (auto mode)
+        fan_layout.addWidget(self.fan_speed_control_slider)
+        
+        fan_speed_value_layout = QHBoxLayout()
+        fan_speed_value_layout.addWidget(QLabel("0%"))
+        fan_speed_value_layout.addStretch()
+        self.manual_control_value_label = QLabel("50%")
+        fan_speed_value_layout.addWidget(self.manual_control_value_label)
+        fan_speed_value_layout.addStretch()
+        fan_speed_value_layout.addWidget(QLabel("100%"))
+        fan_layout.addLayout(fan_speed_value_layout)
+        
+        # Toggle graph button
+        toggle_graph_btn = QPushButton("Hide Graphs")
+        toggle_graph_btn.clicked.connect(self.toggle_graph)
+        self.toggle_graph_btn = toggle_graph_btn
+        fan_layout.addWidget(toggle_graph_btn)
+        
+        fan_layout.addStretch()
+        controls_layout.addWidget(fan_group)
+        
+        # Create status bar
+        self.status_bar = QStatusBar()
+        self.setStatusBar(self.status_bar)
+        
+        # Status bar widgets
+        self.temp_label = QLabel("Temperature: --°C")
+        self.fan_speed_label = QLabel("Fan Speed: --%")
+        self.current_profile_label = QLabel("Current Profile: --")
+        
+        # Add separators between status items
+        self.status_bar.addPermanentWidget(self.temp_label)
+        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.VLine))
+        self.status_bar.addPermanentWidget(self.fan_speed_label)
+        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.VLine))
+        self.status_bar.addPermanentWidget(self.current_profile_label)
+    
     def update_readings(self):
         temperature, fan_speed, current_profile = get_system_readings()
-
-        self.temp_label.config(text=f"Temperature: {temperature} °C")
-        self.fan_speed_label.config(text=f"Fan Speed: {fan_speed}%")
-        self.temperature_graph.update_temperature(temperature)
-        self.fan_speed_graph.update_fan_speed(fan_speed)
-        self.current_profile_label.config(text=f"Current Profile: {current_profile}")
-
-        refresh_seconds = int(self.refresh_slider.get())
-        self.root.after(refresh_seconds * 1000, self.update_readings)
-
-    def delayed_fan_setting(self, value):
-        if self.fan_speed_adjustment_delay is not None:
-            self.root.after_cancel(self.fan_speed_adjustment_delay)
-        self.fan_speed_adjustment_delay = self.root.after(1000, self.apply_fan_speed, value)
-
-    def apply_fan_speed(self, value):
-        slider_value = round(float(value))
+        
+        # Update status bar labels
+        self.temp_label.setText(f"Temperature: {temperature}°C")
+        self.fan_speed_label.setText(f"Fan Speed: {fan_speed}%")
+        self.current_profile_label.setText(f"Current Profile: {current_profile}")
+        
+        # Update combined graph
+        self.combined_graph.update_data(temperature, fan_speed)
+    
+    def update_refresh_interval(self):
+        refresh_seconds = self.refresh_slider.value() * 1000  # Convert to milliseconds
+        self.refresh_timer.setInterval(refresh_seconds)
+    
+    def delayed_fan_setting(self):
+        # Cancel previous timer if it exists
+        if hasattr(self, 'delay_timer') and self.delay_timer.isActive():
+            self.delay_timer.stop()
+        
+        # Create a new timer to apply the setting after a delay
+        self.delay_timer = QTimer(self)
+        self.delay_timer.timeout.connect(self.apply_fan_speed)
+        self.delay_timer.setSingleShot(True)
+        self.delay_timer.start(1000)  # 1 second delay
+        
+        # Update the displayed value immediately
+        slider_value = self.fan_speed_control_slider.value()
+        self.manual_control_value_label.setText(f"{slider_value}%")
+    
+    def apply_fan_speed(self):
+        slider_value = self.fan_speed_control_slider.value()
         try:
             subprocess.run(['pkexec', 'nbfc', 'set', '-s', str(slider_value)])
-            self.manual_control_value_label.config(text=f"{slider_value}%")
         except subprocess.CalledProcessError as e:
             print(f"Error setting fan speed: {e}")
-
-    def open_fan_profile_editor(self):
-        # Create a new top-level window
-        editor_window = ttk.Toplevel(self.root)
-        editor_window.title("Fan Profile Editor")
-        editor_window.geometry("700x700")
-        editor_window.transient(self.root)  # Make it transient to main window
-        
-        # Center the window
-        window_width = 700
-        window_height = 700
-        screen_width = editor_window.winfo_screenwidth()
-        screen_height = editor_window.winfo_screenheight()
-        x = (screen_width - window_width) // 2
-        y = (screen_height - window_height) // 2
-        editor_window.geometry(f"{window_width}x{window_height}+{x}+{y}")
-        
-        # Create the fan profile editor
-        editor = FanProfileEditor(editor_window)
-
-
+    
     def set_auto_control(self):
-        self.current_control_mode = 'auto'
-        try:
-            subprocess.run(['pkexec', 'nbfc', 'set', '-a'])
-        except subprocess.CalledProcessError as e:
-            print(f"Error setting automatic fan control: {e}")
-        self.fan_speed_control_slider.config(state='disabled')
-
-
+        if self.radio_auto_control.isChecked():
+            try:
+                subprocess.run(['pkexec', 'nbfc', 'set', '-a'])
+            except subprocess.CalledProcessError as e:
+                print(f"Error setting automatic fan control: {e}")
+            self.fan_speed_control_slider.setEnabled(False)
+    
     def set_manual_control(self):
-        self.current_control_mode = 'manual'
-        self.fan_speed_control_slider.config(state='normal')
-
-    # def toggle_graph_visibility(self, frame):
-    #     if frame.winfo_viewable():
-    #         frame.pack_forget()
-    #     else:
-    #         frame.pack()
-
+        if self.radio_manual_control.isChecked():
+            self.fan_speed_control_slider.setEnabled(True)
+    
     def toggle_graph(self):
-        # Get current window dimensions
-        current_width = self.root.winfo_width()
-        current_height = self.root.winfo_height()
-        
         if self.graph_visible:
-            # Hide graph
-            self.graph_frame.pack_forget()
-            self.graph_button.config(text="Show Graph")
-            # Reduce window height by 300 pixels
-            new_height = max(950, current_height - 300)  # Ensure minimum height of 950
-            self.root.geometry(f"{current_width}x{new_height}")
+            self.graph_widget.hide()
+            self.toggle_graph_btn.setText("Show Graphs")
         else:
-            # Show graph
-            self.graph_frame.pack(side=ttk.TOP, fill=ttk.BOTH, expand=True)
-            self.graph_button.config(text="Hide Graph")
-            # Increase window height by 300 pixels
-            new_height = current_height + 300
-            self.root.geometry(f"{current_width}x{new_height}")
+            self.graph_widget.show()
+            self.toggle_graph_btn.setText("Hide Graphs")
         
         self.graph_visible = not self.graph_visible
-        
-        # Center the window after resizing
-        # self.center_window_after_resize()
-
     
-    def setup_system_tray(self):
-        """Set up system tray icon for Linux desktop environments"""
-        try:
-            import pystray
-            from PIL import Image, ImageDraw
-            
-            # Create a simple icon
-            icon_image = Image.new('RGB', (64, 64), color = (0, 0, 0))
-            d = ImageDraw.Draw(icon_image)
-            d.rectangle((10, 10, 54, 54), fill=(0, 120, 220))
-            
-            def on_quit_clicked(icon, item):
-                icon.stop()
-                self.root.destroy()
-                
-            def on_show_clicked(icon, item):
-                self.root.deiconify()
-                
-            # Create the menu
-            menu = pystray.Menu(
-                pystray.MenuItem('Show', on_show_clicked),
-                pystray.MenuItem('Quit', on_quit_clicked)
-            )
-            
-            # Create the icon
-            self.tray_icon = pystray.Icon("RyzenMasterCommander", icon_image, "Ryzen Master Commander", menu)
-            
-            # Run the icon in a separate thread
-            import threading
-            threading.Thread(target=self.tray_icon.run, daemon=True).start()
-            
-            # Make window minimize to tray but don't auto-hide on startup
-            # self.root.protocol('WM_DELETE_WINDOW', self.minimize_to_tray)
-        except ImportError:
-            print("pystray not available - system tray functionality disabled")
-            
-    # def minimize_to_tray(self):
-    #     self.root.withdraw()
-
+    def open_fan_profile_editor(self):
+        self.fan_editor = FanProfileEditor()
+        self.fan_editor.show()
 ```
 ---
 ## File: ryzen_master_commander/app/profile_manager.py
 
 ```py
-from ryzen_master_commander.app.system_utils import apply_tdp_settings
-from tkinter.simpledialog import askstring
-import ttkbootstrap as ttk
 import json
 import os
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
+                           QComboBox, QLineEdit, QCheckBox, QPushButton, QInputDialog)
+from PyQt5.QtCore import pyqtSlot, Qt
+
+from ryzen_master_commander.app.system_utils import apply_tdp_settings
 
 class ProfileManager:
-    def __init__(self, root):
-        self.root = root
-        
+    def __init__(self):
         # Check multiple potential profile directories
         potential_dirs = [
             "./tdp_profiles",  # Development location
@@ -852,67 +935,93 @@ class ProfileManager:
         print(f"Using profiles from: {self.profiles_directory}")
         
         self.current_profile = None
-        self.load_profiles()
-
-
-    def create_widgets(self, content_frame):
-        profile_frame = ttk.Frame(content_frame)
-        profile_frame.pack(pady=5)
-
-        profile_label = ttk.Label(profile_frame, text="Performance Profile: ")
-        profile_label.grid(row=0, column=0, padx=5)
-
-        self.profile_dropdown = ttk.Combobox(profile_frame, state="readonly")
-        self.profile_dropdown.grid(row=0, column=1, padx=5)
-        self.profile_dropdown.bind("<<ComboboxSelected>>", self.on_profile_select)
-
-        tdp_frame = ttk.Frame(content_frame)
-        tdp_frame.pack(pady=5)
-
-        fast_limit_label = ttk.Label(tdp_frame, text="Fast Limit (W): ")
-        fast_limit_label.grid(row=0, column=0, padx=5)
-        self.fast_limit_entry = ttk.Entry(tdp_frame)
-        self.fast_limit_entry.grid(row=0, column=1, padx=5)
-
-        slow_limit_label = ttk.Label(tdp_frame, text="Slow Limit (W): ")
-        slow_limit_label.grid(row=1, column=0, padx=5)
-        self.slow_limit_entry = ttk.Entry(tdp_frame)
-        self.slow_limit_entry.grid(row=1, column=1, padx=5)
-
-        slow_time_label = ttk.Label(tdp_frame, text="Slow Time (s): ")
-        slow_time_label.grid(row=2, column=0, padx=5)
-        self.slow_time_entry = ttk.Entry(tdp_frame)
-        self.slow_time_entry.grid(row=2, column=1, padx=5)
-
-        tctl_temp_label = ttk.Label(tdp_frame, text="Tctl Temp (°C): ")
-        tctl_temp_label.grid(row=3, column=0, padx=5)
-        self.tctl_temp_entry = ttk.Entry(tdp_frame)
-        self.tctl_temp_entry.grid(row=3, column=1, padx=5)
-
-        apu_skin_temp_label = ttk.Label(tdp_frame, text="APU Skin Temp (°C): ")
-        apu_skin_temp_label.grid(row=4, column=0, padx=5)
-        self.apu_skin_temp_entry = ttk.Entry(tdp_frame)
-        self.apu_skin_temp_entry.grid(row=4, column=1, padx=5)
-
-        performance_frame = ttk.Frame(tdp_frame)
-        performance_frame.grid(row=5, column=0, columnspan=2, pady=5)
-
-        self.max_performance_var = ttk.BooleanVar()
-        max_performance_checkbox = ttk.Checkbutton(performance_frame, text="Max Performance", variable=self.max_performance_var, command=lambda: self.power_saving_var.set(False))
-        max_performance_checkbox.pack(side=ttk.LEFT, padx=5)
-
-        self.power_saving_var = ttk.BooleanVar()
-        power_saving_checkbox = ttk.Checkbutton(performance_frame, text="Power Saving", variable=self.power_saving_var, command=lambda: self.max_performance_var.set(False))
-        power_saving_checkbox.pack(side=ttk.LEFT, padx=5)
-
-        apply_tdp_button = ttk.Button(tdp_frame, text="Apply TDP Settings", command=lambda: apply_tdp_settings(self.current_profile))
-        apply_tdp_button.grid(row=6, column=0, columnspan=2, pady=5)
-
-        save_profile_button = ttk.Button(content_frame, text="Save Profile", command=self.save_profile)
-        save_profile_button.pack(pady=5)
-
+        self.cached_profiles = self.load_profiles()
+        
+    def create_widgets(self, parent):
+        self.parent = parent
+        layout = parent.layout()
+        
+        # Profile selection
+        profile_layout = QHBoxLayout()
+        profile_layout.addWidget(QLabel("Performance Profile:"))
+        
+        self.profile_dropdown = QComboBox()
+        # Explicitly connect with the correct type
+        self.profile_dropdown.currentIndexChanged.connect(self.on_profile_select)
+        profile_layout.addWidget(self.profile_dropdown)
+        layout.addLayout(profile_layout)
+        
+        # TDP settings
+        # Fast limit
+        fast_limit_layout = QHBoxLayout()
+        fast_limit_layout.addWidget(QLabel("Fast Limit (W):"))
+        self.fast_limit_entry = QLineEdit()
+        fast_limit_layout.addWidget(self.fast_limit_entry)
+        layout.addLayout(fast_limit_layout)
+        
+        # Slow limit
+        slow_limit_layout = QHBoxLayout()
+        slow_limit_layout.addWidget(QLabel("Slow Limit (W):"))
+        self.slow_limit_entry = QLineEdit()
+        slow_limit_layout.addWidget(self.slow_limit_entry)
+        layout.addLayout(slow_limit_layout)
+        
+        # Slow time
+        slow_time_layout = QHBoxLayout()
+        slow_time_layout.addWidget(QLabel("Slow Time (s):"))
+        self.slow_time_entry = QLineEdit()
+        slow_time_layout.addWidget(self.slow_time_entry)
+        layout.addLayout(slow_time_layout)
+        
+        # Tctl temp
+        tctl_temp_layout = QHBoxLayout()
+        tctl_temp_layout.addWidget(QLabel("Tctl Temp (°C):"))
+        self.tctl_temp_entry = QLineEdit()
+        tctl_temp_layout.addWidget(self.tctl_temp_entry)
+        layout.addLayout(tctl_temp_layout)
+        
+        # APU skin temp
+        apu_skin_temp_layout = QHBoxLayout()
+        apu_skin_temp_layout.addWidget(QLabel("APU Skin Temp (°C):"))
+        self.apu_skin_temp_entry = QLineEdit()
+        apu_skin_temp_layout.addWidget(self.apu_skin_temp_entry)
+        layout.addLayout(apu_skin_temp_layout)
+        
+        # Performance options
+        performance_group = QGroupBox("Performance Mode")
+        performance_layout = QHBoxLayout(performance_group)
+        
+        self.max_performance_var = QCheckBox("Max Performance")
+        self.max_performance_var.stateChanged.connect(
+            lambda: self.power_saving_var.setChecked(False) if self.max_performance_var.isChecked() else None
+        )
+        performance_layout.addWidget(self.max_performance_var)
+        
+        self.power_saving_var = QCheckBox("Power Saving")
+        self.power_saving_var.stateChanged.connect(
+            lambda: self.max_performance_var.setChecked(False) if self.power_saving_var.isChecked() else None
+        )
+        performance_layout.addWidget(self.power_saving_var)
+        
+        layout.addWidget(performance_group)
+        
+        # Buttons
+        button_layout = QHBoxLayout()
+        
+        apply_tdp_button = QPushButton("Apply TDP Settings")
+        apply_tdp_button.clicked.connect(lambda: apply_tdp_settings(self.current_profile))
+        button_layout.addWidget(apply_tdp_button)
+        
+        save_profile_button = QPushButton("Save Profile")
+        save_profile_button.clicked.connect(self.save_profile)
+        button_layout.addWidget(save_profile_button)
+        
+        layout.addLayout(button_layout)
+        layout.addStretch()
+        
+        # Populate profile dropdown
         self.update_profile_dropdown()
-
+        
     def load_profiles(self):
         profiles = []
         if not os.path.exists(self.profiles_directory):
@@ -945,54 +1054,70 @@ class ProfileManager:
                     print(f"Unexpected error loading profile '{file}': {e}")
         
         print(f"Loaded {len(profiles)} profiles total")
-        self.cached_profiles = profiles  # Store for reuse
-        return profiles
+        return profiles  # Return the loaded profiles
 
     def update_profile_dropdown(self):
-        profiles = self.load_profiles()
-        if profiles:
-            profile_names = [profile["name"] for profile in profiles]
-            print(f"Setting dropdown values to: {profile_names}")
-            self.profile_dropdown['values'] = profile_names
-        else:
-            print("No profiles found to populate dropdown")
+        if self.cached_profiles:
+            self.profile_dropdown.clear()
+            for profile in self.cached_profiles:
+                self.profile_dropdown.addItem(profile["name"])
+            
+            # Select first profile by default if none is selected
+            if self.profile_dropdown.currentIndex() == -1 and self.profile_dropdown.count() > 0:
+                self.profile_dropdown.setCurrentIndex(0)
+
+    # Fixed method to properly handle the signal
+    def on_profile_select(self, index):
+        """Handle profile selection from dropdown"""
+        if index < 0 or not self.cached_profiles or index >= len(self.cached_profiles):
+            return
+            
+        selected_profile = self.cached_profiles[index]
+        self.current_profile = selected_profile
+        
+        # Update the entries with profile values
+        self.fast_limit_entry.setText(str(self.current_profile["fast-limit"]))
+        self.slow_limit_entry.setText(str(self.current_profile["slow-limit"]))
+        self.slow_time_entry.setText(str(self.current_profile["slow-time"]))
+        self.tctl_temp_entry.setText(str(self.current_profile["tctl-temp"]))
+        self.apu_skin_temp_entry.setText(str(self.current_profile["apu-skin-temp"]))
+        self.max_performance_var.setChecked(self.current_profile["max-performance"])
+        self.power_saving_var.setChecked(self.current_profile["power-saving"])
+        
+        # Apply the profile
+        apply_tdp_settings(self.current_profile)
 
     def save_profile(self):
-        profile_name = askstring("Save Profile", "Enter profile name:")
-        if profile_name:
+        profile_name, ok = QInputDialog.getText(
+            self.parent, "Save Profile", "Enter profile name:"
+        )
+        
+        if ok and profile_name:
             profile = {
                 "name": profile_name,
-                "fast-limit": int(self.fast_limit_entry.get()),
-                "slow-limit": int(self.slow_limit_entry.get()),
-                "slow-time": int(self.slow_time_entry.get()),
-                "tctl-temp": int(self.tctl_temp_entry.get()),
-                "apu-skin-temp": int(self.apu_skin_temp_entry.get()),
-                "max-performance": self.max_performance_var.get(),
-                "power-saving": self.power_saving_var.get()
+                "fast-limit": int(self.fast_limit_entry.text()),
+                "slow-limit": int(self.slow_limit_entry.text()),
+                "slow-time": int(self.slow_time_entry.text()),
+                "tctl-temp": int(self.tctl_temp_entry.text()),
+                "apu-skin-temp": int(self.apu_skin_temp_entry.text()),
+                "max-performance": self.max_performance_var.isChecked(),
+                "power-saving": self.power_saving_var.isChecked()
             }
+            
+            # Save profile to file
             with open(os.path.join(self.profiles_directory, f"{profile_name}.json"), "w") as f:
-                json.dump(profile, f)
+                json.dump(profile, f, indent=2)
+            
+            # Update cached profiles
+            self.cached_profiles = self.load_profiles()
+            
+            # Update dropdown with new profile
             self.update_profile_dropdown()
-
-    def on_profile_select(self, event):
-        selected_profile = self.profile_dropdown.get()
-        for profile in self.load_profiles():
-            if profile["name"] == selected_profile:
-                self.current_profile = profile
-                self.fast_limit_entry.delete(0, ttk.END)
-                self.fast_limit_entry.insert(0, str(self.current_profile["fast-limit"]))
-                self.slow_limit_entry.delete(0, ttk.END)
-                self.slow_limit_entry.insert(0, str(self.current_profile["slow-limit"]))
-                self.slow_time_entry.delete(0, ttk.END)
-                self.slow_time_entry.insert(0, str(self.current_profile["slow-time"]))
-                self.tctl_temp_entry.delete(0, ttk.END)
-                self.tctl_temp_entry.insert(0, str(self.current_profile["tctl-temp"]))
-                self.apu_skin_temp_entry.delete(0, ttk.END)
-                self.apu_skin_temp_entry.insert(0, str(self.current_profile["apu-skin-temp"]))
-                self.max_performance_var.set(self.current_profile["max-performance"])
-                self.power_saving_var.set(self.current_profile["power-saving"])
-                break
-        apply_tdp_settings(self.current_profile)
+            
+            # Select the new profile
+            index = self.profile_dropdown.findText(profile_name)
+            if index >= 0:
+                self.profile_dropdown.setCurrentIndex(index)
 ```
 ---
 ## File: ryzen_master_commander/app/system_utils.py
@@ -1007,10 +1132,10 @@ def get_system_readings():
         output = subprocess.check_output(['nbfc', 'status', '-a'], text=True)
     except subprocess.CalledProcessError as e:
         print(f"Failed to execute 'nbfc status -a': {e}")
-        return "n/a", "n/a"
+        return "n/a", "n/a", "n/a"
     except FileNotFoundError:
         print("nbfc command not found. Make sure NoteBook FanControl is installed.")
-        return "n/a", "n/a"
+        return "n/a", "n/a", "n/a"
 
     temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
     fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
@@ -1029,16 +1154,21 @@ def apply_tdp_settings(current_profile):
                 command.extend([f'--{key}={value * 1000}'])
             elif key == "slow-time":
                 command.extend([f'--{key}={value * 1000}'])
-            elif key not in ["name", "max_performance", "power_saving"]:
+            elif key not in ["name", "max-performance", "power-saving"]:
                 command.extend([f'--{key}={value}'])
-        if current_profile.get("power_saving"):
+        if current_profile.get("power-saving"):
             command.append("--power-saving")
-        elif current_profile.get("max_performance"):
+        elif current_profile.get("max-performance"):
             command.append("--max-performance")
         try:
             subprocess.run(command)
+            print(f"Applied TDP settings with command: {' '.join(command)}")
+            return True, "TDP settings applied successfully"
         except subprocess.CalledProcessError as e:
-            print(f"Error applying TDP settings: {e}")
+            error_msg = f"Error applying TDP settings: {e}"
+            print(error_msg)
+            return False, error_msg
+    return False, "No profile selected"
 
 def apply_fan_profile(profile_name):
     """Apply a fan profile by name with nbfc command"""
@@ -1054,110 +1184,77 @@ def apply_fan_profile(profile_name):
 ## File: ryzen_master_commander/main.py
 
 ```py
-import ttkbootstrap as ttk
-from ryzen_master_commander.app.main_window import MainWindow
+import sys
 import os
-# import matplotlib
-# matplotlib.use('TkAgg')
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtGui import QIcon
+from ryzen_master_commander.app.main_window import MainWindow
 
 def main():
-    theme = detect_system_theme()
+    # Create Qt application
+    app = QApplication(sys.argv)
+    app.setApplicationName("Ryzen Master Commander")
     
-    # Create the root window ONCE and keep it for the entire app lifecycle
-    root = ttk.Window(themename=theme)
-    root.title("Ryzen Master and Commander")
-    root.geometry("500x950")
+    # Set application icon
+    icon_paths = [
+        "/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+        "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+        "./img/icon.png"
+    ]
     
-    # Set the window icon immediately
+    for path in icon_paths:
+        if os.path.exists(path):
+            app.setWindowIcon(QIcon(path))
+            break
+    
+    # Configure PyQtGraph for dark/light mode
     try:
-        icon_paths = [
-            "/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
-            "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
-            "./img/icon.png"
-        ]
+        import pyqtgraph as pg
+        # Check for KDE dark mode
+        is_dark_mode = False
         
-        for path in icon_paths:
-            if os.path.exists(path):
-                from PIL import Image, ImageTk
-                icon = ImageTk.PhotoImage(Image.open(path))
-                root.iconphoto(False, icon)  # Changed to False to not affect future windows
-                break
-                
-        # Set window class for KDE
-        root.tk.call('wm', 'class', root._w, "ryzen-master-commander")
-    except Exception as e:
-        print(f"Error setting application icon: {e}")
-    
-    # Center window first, before adding any content
-    center_window(root, 500, 950)
-    
-    # Ensure the window is visible and drawn before creating MainWindow
-    root.update_idletasks()
-    
-    # Now create the main window using our already configured root
-    app = MainWindow(root)
-    
-    # Start the main loop with the fully configured window
-    root.mainloop()
-
-def center_window(window, width, height):
-    """Center the window on the screen."""
-    # Get screen dimensions
-    screen_width = window.winfo_screenwidth()
-    screen_height = window.winfo_screenheight()
-    
-    # Calculate position coordinates
-    x = (screen_width - width) // 2
-    y = (screen_height - height) // 2
-    
-    # Set window position
-    window.geometry(f"{width}x{height}+{x}+{y}")
-
-def ensure_window_visible(root):
-    if not root.winfo_viewable():
-        root.deiconify()
-    root.attributes('-topmost', True)
-    root.update()
-    root.attributes('-topmost', False)
-    root.state('normal')
-    root.focus_force()
-
-def detect_system_theme():
-    """Detect if system is using dark or light theme and return appropriate ttkbootstrap theme"""
-    import os
-    import subprocess
-    
-    # Default fallback theme
-    default_theme = "darkly"
-    
-    try:
-        # For KDE Plasma
         if os.environ.get('XDG_CURRENT_DESKTOP') == 'KDE':
-            result = subprocess.run(
-                ["kreadconfig5", "--group", "General", "--key", "ColorScheme"],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0:
-                kde_theme = result.stdout.strip().lower()
-                return "darkly" if "dark" in kde_theme else "cosmo"
-                
-        # For GNOME
-        elif os.environ.get('XDG_CURRENT_DESKTOP') in ['GNOME', 'Unity']:
-            result = subprocess.run(
-                ["gsettings", "get", "org.gnome.desktop.interface", "color-scheme"],
-                capture_output=True, text=True
-            )
-            if result.returncode == 0 and "dark" in result.stdout.lower():
-                return "darkly"
-            else:
-                return "cosmo"
-    except Exception as e:
-        print(f"Error detecting system theme: {e}")
+            try:
+                result = subprocess.run(
+                    ["kreadconfig5", "--group", "General", "--key", "ColorScheme"],
+                    capture_output=True, text=True
+                )
+                is_dark_mode = "dark" in result.stdout.strip().lower()
+            except Exception as e:
+                print(f"Error detecting KDE theme: {e}")
+        
+        # Another approach for dark mode detection
+        if not is_dark_mode:
+            try:
+                from PyQt5.QtGui import QPalette
+                app_palette = app.palette()
+                # If text is lighter than background, we're likely in dark mode
+                bg_color = app_palette.color(QPalette.Window).lightness()
+                text_color = app_palette.color(QPalette.WindowText).lightness()
+                is_dark_mode = text_color > bg_color
+            except Exception as e:
+                print(f"Error using palette for theme detection: {e}")
+        
+        print(f"Dark mode detected: {is_dark_mode}")
+        
+        # Set PyQtGraph theme
+        if is_dark_mode:
+            pg.setConfigOption('background', 'k')
+            pg.setConfigOption('foreground', 'w')
+        else:
+            pg.setConfigOption('background', 'w')
+            pg.setConfigOption('foreground', 'k')
+    except ImportError:
+        print("PyQtGraph not available")
     
-    return default_theme
-
+    # Create and show the main window
+    main_window = MainWindow()
+    main_window.show()
+    
+    # Start the application
+    sys.exit(app.exec_())
 
 if __name__ == "__main__":
-    app.main()
+    main()
 ```
 ---

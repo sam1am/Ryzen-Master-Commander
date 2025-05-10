@@ -38,7 +38,7 @@ class MainWindow(QMainWindow):
     def init_ui(self):
         # Set window properties
         self.setWindowTitle("Ryzen Master Commander")
-        self.resize(900, 600)
+        self.resize(900, 700)
         
         # Create central widget
         central_widget = QWidget()
@@ -70,7 +70,7 @@ class MainWindow(QMainWindow):
         splitter.addWidget(controls_container)
         
         # Set initial sizes for splitter
-        splitter.setSizes([200, 400])
+        splitter.setSizes([380, 320])
         
         # Create TDP Controls group box
         tdp_group = QGroupBox("TDP Controls")
