@@ -17,18 +17,6 @@ Ryzen Master & Commander is a Linux GUI application for monitoring and controlli
 
 To get started with Ryzen Master Commander quickly, follow these steps:
 
-### Prerequisites
-
-Make sure you have the following command-line tools installed and configured on your system:
-
-- **`nbfc` (NoteBook FanControl):** For fan control.
-  - Project: [https://github.com/hirschmann/nbfc](https://github.com/hirschmann/nbfc) (Original) or a Linux-specific fork if available for your distribution (e.g., `nbfc-linux`).
-  - Ensure you have a working NBFC configuration for your device.
-- **`ryzenadj`:** For adjusting TDP and other Ryzen processor settings.
-  - Project: [https://github.com/FlyGoat/RyzenAdj](https://github.com/FlyGoat/RyzenAdj)
-
-The application also requires Python 3 (preferably 3.8 or higher).
-
 ### Installation
 
 #### Arch Linux (and derivatives like Manjaro)
