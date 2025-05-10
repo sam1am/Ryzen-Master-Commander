@@ -1,4 +1,3 @@
-ttkbootstrap
 matplotlib
 numpy
 Pillow
