@@ -1,9 +1,9 @@
-# import os
+import os
 import subprocess
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
                             QSlider, QComboBox, QGroupBox, QCheckBox, QPushButton, 
                             QRadioButton, QStatusBar, QFrame, QSplitter, QApplication,
-                            QSystemTrayIcon, QMenu, QAction)
+                            QSystemTrayIcon, QMenu, QAction, QMessageBox)
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
 from PyQt5.QtGui import QFont, QIcon
 # import sys
@@ -21,6 +21,9 @@ class MainWindow(QMainWindow):
         self.profile_manager = ProfileManager()
         self.fan_speed_adjustment_delay = None
         self.graph_visible = True
+
+        if not self.check_nbfc_running():
+            self.start_nbfc_service()
         
         # Set up the UI
         self.init_ui()
@@ -40,6 +43,33 @@ class MainWindow(QMainWindow):
         # Schedule first reading
         QTimer.singleShot(1000, self.update_readings)
 
+    def check_nbfc_running(self):
+        """Check if NBFC service is running"""
+        try:
+            result = subprocess.run(['nbfc', 'status'], 
+                                   capture_output=True, 
+                                   text=True)
+            return "ERROR: connect()" not in result.stderr
+        except Exception:
+            return False
+    
+    def start_nbfc_service(self):
+        """Prompt user to start NBFC service"""
+        # msg = QMessageBox(self)
+        # msg.setIcon(QMessageBox.Warning)
+        # msg.setWindowTitle("NBFC Service Not Running")
+        # msg.setText("The notebook fan control service (NBFC) is not running.")
+        # msg.setInformativeText("Fan control features require NBFC to be running. Would you like to start it now?")
+        # msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
+        # msg.setDefaultButton(QMessageBox.Yes)
+        
+        # if msg.exec_() == QMessageBox.Yes:
+        try:
+            subprocess.run(['pkexec', 'nbfc', 'start'], check=True)
+            # QMessageBox.information(self, "Success", "NBFC service started successfully.")
+        except subprocess.CalledProcessError:
+            QMessageBox.critical(self, "Error", "Failed to start NBFC service. Fan control features may not work properly.")
+    
     def setup_system_tray(self):
         """Set up the system tray icon and menu"""
         # Create the tray icon
