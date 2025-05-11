@@ -27,8 +27,9 @@ for size in ['16x16', '32x32', '64x64', '128x128']:
         data_files.append((icon_target_dir, [icon_source_file_rel]))
 
 setup(
+    #get version from ./ver.txt
+    version = open('version.txt').read().strip(),
     name="ryzen-master-commander",
-    version="1.0.5", # <-- INCREMENT VERSION AGAIN!
     author="sam1am",
     author_email="noreply@merrythieves.com",
     description="TDP and fan control for AMD Ryzen processors",

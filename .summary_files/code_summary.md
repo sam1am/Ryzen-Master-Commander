@@ -13,6 +13,13 @@ Project Structure:
         |-- PKGBUILD
         |-- ryzen-master-commander-1.0.0-1-any.pkg.tar.zst
         |-- ryzen-master-commander-1.0.0.tar.gz
+        |-- ryzen-master-commander-1.0.1.tar.gz
+        |-- ryzen-master-commander-1.0.2.tar.gz
+        |-- ryzen-master-commander-1.0.3.tar.gz
+        |-- ryzen-master-commander-1.0.4.tar.gz
+        |-- ryzen-master-commander-1.0.5.tar.gz
+        |-- ryzen-master-commander-1.0.6-1-any.pkg.tar.zst
+        |-- ryzen-master-commander-1.0.6.tar.gz
         |-- tdp_profiles
 |-- img
     |-- icon.png
@@ -23,7 +30,7 @@ Project Structure:
 |-- manifest.in
 |-- polkit
     |-- com.merrythieves.ryzenadj.policy
-|-- rebuild_install.sh
+|-- rebuild_dev.sh
 |-- requirements.txt
 |-- ryzen_master_commander
     |-- __init__.py
@@ -60,60 +67,10 @@ Project Structure:
             |-- WinMini-Balanced.json
             |-- WinMini-BatterySaver.json
             |-- WinMini-MaxPerformance.json
+|-- version.txt
 
 ```
 
----
-## File: polkit/com.merrythieves.ryzenadj.policy
-
-```policy
-<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE policyconfig PUBLIC
- "-//freedesktop//DTD PolicyKit Policy Configuration 1.0//EN"
- "http://www.freedesktop.org/standards/PolicyKit/1/policyconfig.dtd">
-<policyconfig>
-  <vendor>Ryzen Master Commander</vendor>
-  <vendor_url>https://github.com/sam1am/Ryzen-Master-Commander</vendor_url>
-
-  <action id="com.merrythieves.ryzenadj">
-    <description>Run ryzenadj with elevated privileges</description>
-    <message>Authentication is required to change processor settings</message>
-    <icon_name>cpu</icon_name>
-    <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>yes</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/ryzenadj</annotate>
-    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
-  </action>
-  
-  <action id="com.merrythieves.nbfc">
-    <description>Run nbfc with elevated privileges</description>
-    <message>Authentication is required to control fan settings</message>
-    <icon_name>fan</icon_name>
-    <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
-      <allow_active>yes</allow_active>
-    </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/nbfc</annotate>
-    <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
-  </action>
-</policyconfig>
-```
----
-## File: ryzen_master_commander/__init__.py
-
-```py
-
-```
----
-## File: ryzen_master_commander/app/__init__.py
-
-```py
-"""App package for Ryzen Master Commander."""
-```
 ---
 ## File: ryzen_master_commander/app/fan_profile_editor.py
 
@@ -122,39 +79,49 @@ import os
 import glob
 import json
 import subprocess
-import numpy as np
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-                            QLabel, QComboBox, QPushButton, QLineEdit, QMessageBox)
-from PyQt5.QtCore import Qt
+                            QLabel, QComboBox, QPushButton, QLineEdit, QMessageBox,
+                            QGraphicsView) # QGraphicsView for NoDrag
+from PyQt5.QtCore import Qt, pyqtSignal, QPointF
 
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.figure import Figure
+import pyqtgraph as pg
+
+class CustomPlotWidget(pg.PlotWidget):
+    """
+    Custom PlotWidget to reliably emit a signal on mouse release events
+    occurring specifically over this widget. Also sets NoDrag mode.
+    """
+    mouse_released_on_widget = pyqtSignal(object) 
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Set NoDrag mode for the QGraphicsView base to prevent it from initiating drags.
+        self.setDragMode(QGraphicsView.NoDrag) 
+
+    def mouseReleaseEvent(self, ev):
+        super().mouseReleaseEvent(ev)
+        self.mouse_released_on_widget.emit(ev)
 
 class FanProfileEditor(QMainWindow):
-    def __init__(self):
+    def __init__(self, current_nbfc_profile_name=None):
         super().__init__()
+        self.current_nbfc_profile_name_from_main = current_nbfc_profile_name
         
-        self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve points (temp, fan_speed)
-        self.current_config = None  # Store the full config for saving
-        self.hover_point = None
-        self.drag_point = None
+        self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]
+        self.current_config = None
         
-        # NBFC configs directory
+        self.hover_point_index = None
+        self.drag_point_index = None # This is key for persistent drag
+        
         self.nbfc_configs_dir = "/usr/share/nbfc/configs/"
-        
-        # User configs directory for saving custom profiles
-        self.user_configs_dir = os.path.expanduser("/usr/share/nbfc/configs/")
-        if not os.path.exists(self.user_configs_dir):
-            os.makedirs(self.user_configs_dir, exist_ok=True)
+        self.view_box = None
         
         self.init_ui()
     
     def init_ui(self):
         self.setWindowTitle("NBFC Fan Profile Editor")
-        self.resize(800, 600)
+        self.resize(800, 650) # Slightly taller for new label
         
-        # Create central widget and main layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
@@ -162,571 +129,367 @@ class FanProfileEditor(QMainWindow):
         # Title
         title_label = QLabel("NBFC Fan Profile Editor")
         title_label.setAlignment(Qt.AlignCenter)
-        font = title_label.font()
-        font.setPointSize(16)
-        font.setBold(True)
+        font = title_label.font(); font.setPointSize(16); font.setBold(True)
         title_label.setFont(font)
         main_layout.addWidget(title_label)
         
-        # Available profiles frame
+        # Profile Selection Group
         profiles_group = QGroupBox("Available Profiles")
         profiles_layout = QHBoxLayout(profiles_group)
-        
         profiles_layout.addWidget(QLabel("Select Profile:"))
-        
         self.profiles_list = self.get_available_profiles()
         self.profile_dropdown = QComboBox()
         self.profile_dropdown.addItems(self.profiles_list)
         self.profile_dropdown.currentIndexChanged.connect(self.on_profile_selected)
         profiles_layout.addWidget(self.profile_dropdown, 1)
-        
-        load_btn = QPushButton("Load")
-        load_btn.clicked.connect(self.load_selected_profile)
+        load_btn = QPushButton("Load"); load_btn.clicked.connect(self.load_selected_profile)
         profiles_layout.addWidget(load_btn)
-        
-        apply_btn = QPushButton("Apply")
-        apply_btn.clicked.connect(self.apply_selected_profile)
+        apply_btn = QPushButton("Apply"); apply_btn.clicked.connect(self.apply_selected_profile)
         profiles_layout.addWidget(apply_btn)
-        
         main_layout.addWidget(profiles_group)
         
-        # Matplotlib figure for plotting
-        self.fig = Figure(figsize=(6, 4), dpi=100)
-        self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvas(self.fig)
-        self.canvas.mpl_connect('button_press_event', self.on_click)
-        self.canvas.mpl_connect('motion_notify_event', self.on_hover)
-        self.canvas.mpl_connect('button_release_event', self.on_release)
-        main_layout.addWidget(self.canvas)
+        # Plot Widget Setup
+        self.plot_widget = CustomPlotWidget()
+        main_layout.addWidget(self.plot_widget)
+
+        self.view_box = self.plot_widget.plotItem.vb
+        self.view_box.setMouseMode(pg.ViewBox.PanMode) # Default is PanMode, ensures not RectMode
+        self.view_box.setMouseEnabled(x=False, y=False) # Disable ViewBox's own mouse pan/zoom
+        self.plot_widget.plotItem.setMenuEnabled(False) # Disable right-click context menu on PlotItem
+
+        self.plot_widget.setLabel('left', 'Fan Speed (%)')
+        self.plot_widget.setLabel('bottom', 'Temperature (°C)')
+        self.plot_widget.setXRange(0, 100, padding=0.01) # Small padding to ensure 0 and 100 are visible
+        self.plot_widget.setYRange(0, 100, padding=0.01)
+        self.plot_widget.showGrid(x=True, y=True)
+        self.plot_widget.setTitle('Fan Speed Curve')
+
+        # Plot Items
+        self.curve_item = self.plot_widget.plot([], [], pen='b', symbol='o', symbolSize=8, symbolBrush='b')
+        self.selected_point_item = pg.ScatterPlotItem([], [], size=12, pen=pg.mkPen('r', width=2), brush=pg.mkBrush(255,0,0,120))
+        self.plot_widget.addItem(self.selected_point_item)
+        self.coord_text_item = pg.TextItem(anchor=(0.5,1.8)); self.plot_widget.addItem(self.coord_text_item)
+        self.coord_text_item.hide()
+
+        # Connect mouse event signals
+        self.plot_widget.scene().sigMouseClicked.connect(self.pg_on_scene_click)
+        self.plot_widget.scene().sigMouseMoved.connect(self.pg_on_scene_move)
+        self.plot_widget.mouse_released_on_widget.connect(self.pg_on_widget_mouse_release)
         
-        # Controls for curve manipulation
+        # Curve Controls Group
         controls_group = QGroupBox("Curve Controls")
-        controls_layout = QHBoxLayout(controls_group)
+        controls_layout = QVBoxLayout(controls_group) # Changed to QVBoxLayout for instructions
         
-        add_point_btn = QPushButton("Add Point")
-        add_point_btn.clicked.connect(self.add_point)
-        controls_layout.addWidget(add_point_btn)
-        
-        remove_point_btn = QPushButton("Remove Point")
-        remove_point_btn.clicked.connect(self.remove_point)
-        controls_layout.addWidget(remove_point_btn)
-        
-        reset_btn = QPushButton("Reset")
-        reset_btn.clicked.connect(self.reset_curve)
-        controls_layout.addWidget(reset_btn)
+        buttons_layout = QHBoxLayout() # For Add and Reset buttons
+        add_point_btn = QPushButton("Add Point"); add_point_btn.clicked.connect(self.add_point)
+        buttons_layout.addWidget(add_point_btn)
+        reset_btn = QPushButton("Reset"); reset_btn.clicked.connect(self.reset_curve)
+        buttons_layout.addWidget(reset_btn)
+        controls_layout.addLayout(buttons_layout)
+
+        # Instructions for removing points
+        remove_instruction_label = QLabel("<i>Right-click a point on the curve to remove it.</i>")
+        remove_instruction_label.setAlignment(Qt.AlignCenter)
+        controls_layout.addWidget(remove_instruction_label)
         
         main_layout.addWidget(controls_group)
         
-        # Save profile section
+        # Save Profile Group
         save_group = QGroupBox("Save Profile")
-        save_layout = QHBoxLayout(save_group)
-        
-        save_layout.addWidget(QLabel("Profile Name:"))
-        
+        save_layout = QHBoxLayout(save_group); save_layout.addWidget(QLabel("Profile Name:"))
         self.custom_profile_name = QLineEdit("MyCustomProfile")
         save_layout.addWidget(self.custom_profile_name, 1)
-        
-        save_btn = QPushButton("Save Custom Profile")
-        save_btn.clicked.connect(self.save_custom_profile)
+        save_btn = QPushButton("Save Custom Profile"); save_btn.clicked.connect(self.save_custom_profile)
         save_layout.addWidget(save_btn)
-        
         main_layout.addWidget(save_group)
         
-        # Initialize plot
         self.update_plot()
-        
-        # Load a default profile if available
-        if self.profiles_list:
-            self.on_profile_selected(0)
+        self.select_initial_profile()
     
+    def select_initial_profile(self):
+        """Selects the initial profile in the dropdown, if applicable."""
+        initial_profile_to_set = None
+        if self.current_nbfc_profile_name_from_main and \
+           self.current_nbfc_profile_name_from_main not in ["n/a", "--"]:
+            if self.current_nbfc_profile_name_from_main in self.profiles_list:
+                initial_profile_to_set = self.current_nbfc_profile_name_from_main
+        
+        if initial_profile_to_set:
+            try: 
+                idx = self.profiles_list.index(initial_profile_to_set)
+                self.profile_dropdown.setCurrentIndex(idx)
+                # Manually call load if index changed, as currentIndexChanged might not fire if already at 0
+                # However, if it's programmatically set, it should fire.
+                # self.load_selected_profile() # This might be redundant if currentIndexChanged fires.
+            except ValueError:
+                if self.profiles_list: self.profile_dropdown.setCurrentIndex(0)
+        elif self.profiles_list:
+            self.profile_dropdown.setCurrentIndex(0)
+        # If setCurrentIndex was called and it changed the index,
+        # on_profile_selected -> load_selected_profile will be triggered.
+        # If the index was already 0 and it was set to 0, it might not.
+        # So, if index is 0 and it's the first load, explicitly load.
+        if self.profile_dropdown.currentIndex() == 0 and self.profiles_list and not self.current_config:
+             self.load_selected_profile()
+
+
     def get_available_profiles(self):
-        """Get list of available NBFC profiles"""
-        # Check system profiles
-        system_profiles = glob.glob(os.path.join(self.nbfc_configs_dir, "*.json"))
-        
-        # Extract names
-        profile_names = [os.path.splitext(os.path.basename(p))[0] for p in system_profiles]
-        
-        return sorted(profile_names)
+        """Scans the NBFC configs directory for .json files and returns their names."""
+        try:
+            system_profiles = glob.glob(os.path.join(self.nbfc_configs_dir, "*.json"))
+            profile_names = [os.path.splitext(os.path.basename(p))[0] for p in system_profiles]
+            return sorted(profile_names)
+        except Exception as e:
+            print(f"Error getting available profiles: {e}")
+            return []
     
     def on_profile_selected(self, index):
-        """Handle profile selection from dropdown"""
+        """Handles selection change in the profile dropdown."""
         if index >= 0:
             self.load_selected_profile()
     
     def load_selected_profile(self):
-        """Load the currently selected profile"""
+        """Loads fan curve data from the selected NBFC profile file."""
         profile_name = self.profile_dropdown.currentText()
-        if not profile_name:
-            return
-            
-        # Try user directory first
-        user_path = os.path.join(self.user_configs_dir, f"{profile_name}.json")
-        system_path = os.path.join(self.nbfc_configs_dir, f"{profile_name}.json")
+        if not profile_name: return
         
-        if os.path.exists(user_path):
-            file_path = user_path
-        elif os.path.exists(system_path):
-            file_path = system_path
-        else:
-            QMessageBox.critical(self, "Error", f"Profile '{profile_name}' not found")
+        self.custom_profile_name.setText(profile_name)
+        file_path = os.path.join(self.nbfc_configs_dir, f"{profile_name}.json")
+        
+        if not os.path.exists(file_path):
+            QMessageBox.critical(self, "Error", f"Profile '{profile_name}' not found at {file_path}.")
+            self.reset_curve(update_dropdown=False); self.update_plot()
             return
             
         try:
-            # Load the NBFC config
-            with open(file_path, 'r') as f:
-                config = json.load(f)
-            
-            # Store the full config for later saving    
+            with open(file_path, 'r') as f: config = json.load(f)
             self.current_config = config
             
-            # Extract fan curve points
-            if 'FanConfigurations' in config and len(config['FanConfigurations']) > 0:
-                fan_config = config['FanConfigurations'][0]
-                curve_points = []
-                
-                # Check for TemperatureThresholds
+            curve_points = []
+            # ... (Parsing logic remains the same as previous correct version)
+            if 'FanConfigurations' in config and config['FanConfigurations']:
+                fan_config = config['FanConfigurations'][0] 
                 if 'TemperatureThresholds' in fan_config and fan_config['TemperatureThresholds']:
                     for threshold in fan_config['TemperatureThresholds']:
                         if 'UpThreshold' in threshold and 'FanSpeed' in threshold:
                             curve_points.append((threshold['UpThreshold'], threshold['FanSpeed']))
-                
-                # Check for FanSpeedPercentageOverrides - different format types
-                if 'FanSpeedPercentageOverrides' in fan_config and fan_config['FanSpeedPercentageOverrides']:
+                elif 'FanSpeedPercentageOverrides' in fan_config and fan_config['FanSpeedPercentageOverrides']:
                     overrides = fan_config['FanSpeedPercentageOverrides']
-                    
-                    # Check if using Temperature/FanSpeed format
-                    if overrides and 'Temperature' in overrides[0] and 'FanSpeed' in overrides[0]:
-                        for override in overrides:
-                            curve_points.append((override['Temperature'], override['FanSpeed']))
-                    
-                    # Check if using FanSpeedPercentage/FanSpeedValue format
-                    elif overrides and 'FanSpeedPercentage' in overrides[0] and 'FanSpeedValue' in overrides[0]:
-                        # For this format, we need additional info about min/max speed values
-                        # We'll create a mapping of temps based on position in array
-                        min_temp = 30
-                        max_temp = 90
-                        step = (max_temp - min_temp) / (len(overrides) - 1) if len(overrides) > 1 else 10
-                        
-                        for i, override in enumerate(overrides):
-                            temp = min_temp + i * step
-                            curve_points.append((temp, override['FanSpeedPercentage']))
+                    if overrides and isinstance(overrides, list) and len(overrides) > 0:
+                        if isinstance(overrides[0], dict) and 'Temperature' in overrides[0] and 'FanSpeed' in overrides[0]:
+                            for override in overrides: curve_points.append((override['Temperature'], override['FanSpeed']))
+                        elif isinstance(overrides[0], dict) and 'FanSpeedPercentage' in overrides[0] and 'FanSpeedValue' in overrides[0]:
+                            min_temp, max_temp = 30, 90; step = (max_temp - min_temp) / (len(overrides) -1) if len(overrides)>1 else 10
+                            for i, override in enumerate(overrides): curve_points.append((min_temp + i * step, override['FanSpeedPercentage']))
                 
-                if curve_points:
-                    # Use the extracted points
-                    self.points = curve_points
-                    self.update_plot()
-                    # QMessageBox.information(self, "Success", f"Loaded fan curve from '{profile_name}'")
-                else:
-                    # No points found, create default
-                    self.reset_curve()
-                    QMessageBox.information(self, "Note", "No fan curve found, using default curve")
-            else:
-                QMessageBox.warning(self, "Warning", "Selected profile doesn't contain fan configuration")
+                if curve_points: self.points = [(round(p[0]), round(p[1])) for p in curve_points]
+                else: QMessageBox.information(self, "Note", f"No fan curve data in '{profile_name}'. Using default."); self.reset_curve(update_dropdown=False)
+            else: QMessageBox.warning(self, "Warning", f"Profile '{profile_name}' no fan config. Using default."); self.reset_curve(update_dropdown=False)
+            self.update_plot()
                 
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to load profile: {str(e)}")
-            self.reset_curve()
+            QMessageBox.critical(self, "Error", f"Failed to load profile '{profile_name}': {str(e)}")
+            self.reset_curve(update_dropdown=False); self.update_plot()
     
     def apply_selected_profile(self):
-        """Apply the selected profile using nbfc command"""
+        """Applies the currently selected profile using 'nbfc' command with pkexec."""
         profile_name = self.profile_dropdown.currentText()
-        if not profile_name:
-            QMessageBox.warning(self, "Warning", "Please select a profile first")
-            return
-            
+        if not profile_name: QMessageBox.warning(self, "Warning", "Please select a profile."); return
         try:
-            subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True)
-            QMessageBox.information(self, "Success", f"Applied fan profile '{profile_name}'")
+            subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True, capture_output=True, text=True)
+            QMessageBox.information(self, "Success", f"Applied fan profile '{profile_name}'.")
         except subprocess.CalledProcessError as e:
-            error_msg = f"Command failed: pkexec nbfc config -a '{profile_name}'\nError: {str(e)}"
-            QMessageBox.critical(self, "Error", error_msg)
+            error_details = f"Error: {e.stderr or e.stdout or str(e)}"
+            QMessageBox.critical(self, "Error", f"Failed to apply profile '{profile_name}'.\n{error_details}")
+        except FileNotFoundError:
+            QMessageBox.critical(self, "Error", "pkexec or nbfc command not found.")
     
     def save_custom_profile(self):
-        """Save the current fan curve as a custom NBFC profile with root privileges"""
-        name = self.custom_profile_name.text()
-        if not name:
-            QMessageBox.warning(self, "Warning", "Please enter a profile name")
-            return
-                
-        # Start with a template or use current loaded config as base
-        if self.current_config:
-            config = self.current_config.copy()
-            # Update name
-            config["NotebookModel"] = name
-        else:
-            # Create a basic NBFC config
-            config = {
-                "NotebookModel": name,
-                "Author": "Ryzen Master Commander",
-                "EcPollInterval": 5000,
-                "ReadWriteWords": False,
-                "CriticalTemperature": 85,
-                "FanConfigurations": [
-                    {
-                        "ReadRegister": 122,
-                        "WriteRegister": 122,
-                        "MinSpeedValue": 0,
-                        "MaxSpeedValue": 255,
-                        "ResetRequired": True,
-                        "FanSpeedResetValue": 0,
-                        "FanDisplayName": "Fan"
-                    }
-                ]
-            }
+        """Saves the current fan curve as a new NBFC profile .json file."""
+        name = self.custom_profile_name.text().strip()
+        if not name: QMessageBox.warning(self, "Warning", "Please enter a profile name."); return
+        if any(c in name for c in "/\\:*?\"<>|"): QMessageBox.warning(self, "Warning", "Profile name contains invalid characters."); return
+
+        # ... (Config creation/update logic remains the same as previous correct version)
+        if self.current_config: config = self.current_config.copy(); config["NotebookModel"] = name
+        else: config = { "NotebookModel": name, "Author": "Ryzen Master Commander", "EcPollInterval": 5000, "ReadWriteWords": False, "CriticalTemperature": 85, "FanConfigurations": [{"ReadRegister": 122, "WriteRegister": 122, "MinSpeedValue": 0, "MaxSpeedValue": 255, "ResetRequired": True, "FanSpeedResetValue": 0, "FanDisplayName": "Fan"}]}
+        if "FanConfigurations" not in config or not config["FanConfigurations"]: config["FanConfigurations"] = [{"ReadRegister": 122, "WriteRegister": 122}] 
+        if not isinstance(config["FanConfigurations"], list): config["FanConfigurations"] = [config["FanConfigurations"]]
+        if not config["FanConfigurations"]: config["FanConfigurations"].append({})
         
-        # Make sure FanConfigurations exists
-        if "FanConfigurations" not in config or not config["FanConfigurations"]:
-            config["FanConfigurations"] = [{"ReadRegister": 122, "WriteRegister": 122}]
-        
-        # Create temperature thresholds from points
-        config["FanConfigurations"][0]["TemperatureThresholds"] = [
-            {
-                "UpThreshold": int(temp),
-                "DownThreshold": max(0, int(temp) - 5),  # 5 degree hysteresis
-                "FanSpeed": float(speed)
-            }
-            for temp, speed in sorted(self.points, key=lambda p: p[0])
-        ]
-        
+        thresholds = []
+        if self.points:
+            t_0, s_0 = self.points[0]; thresholds.append({"UpThreshold": int(t_0), "DownThreshold": int(max(0, t_0 - 5)), "FanSpeed": float(s_0)})
+            for i in range(1, len(self.points)):
+                t_curr, s_curr = self.points[i]; t_prev, _ = self.points[i-1]
+                down_thresh = min(int(t_prev + 1), int(t_curr)); down_thresh = max(0, down_thresh)
+                thresholds.append({"UpThreshold": int(t_curr), "DownThreshold": down_thresh, "FanSpeed": float(s_curr)})
+        config["FanConfigurations"][0]["TemperatureThresholds"] = thresholds
+        config["FanConfigurations"][0].pop("FanSpeedPercentageOverrides", None)
+
         try:
-            # First save to a temporary file in the user's home directory
-            temp_dir = os.path.expanduser("~/.config/ryzen-master-commander/temp")
+            temp_dir = os.path.expanduser("~/.config/ryzen-master-commander/temp_profiles")
             os.makedirs(temp_dir, exist_ok=True)
             temp_file = os.path.join(temp_dir, f"{name}.json")
-            
-            with open(temp_file, 'w') as f:
-                json.dump(config, f, indent=2)
-            
-            # Use pkexec to copy the file to the system directory
-            target_file = f"/usr/share/nbfc/configs/{name}.json"
-            
-            # Execute cp with pkexec to copy with root privileges
-            subprocess.run([
-                'pkexec', 'cp', temp_file, target_file
-            ], check=True)
-            
+            with open(temp_file, 'w') as f: json.dump(config, f, indent=2)
+            target_file = os.path.join(self.nbfc_configs_dir, f"{name}.json")
+            subprocess.run(['pkexec', 'cp', temp_file, target_file], check=True, capture_output=True, text=True)
             QMessageBox.information(self, "Success", f"Saved profile to {target_file}")
-            
-            # Update the profile list
-            self.refresh_ui()
-            
+            self.refresh_ui_after_save(name)
+        except subprocess.CalledProcessError as e:
+            error_details = f"Error: {e.stderr or e.stdout or str(e)}"
+            QMessageBox.critical(self, "Error", f"Failed to save profile with pkexec.\n{error_details}")
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save profile: {str(e)}")
 
-    def refresh_ui(self):
-        """Refresh the profile list in the UI"""
-        # Get updated profile list
+    def refresh_ui_after_save(self, saved_profile_name):
+        """Refreshes the profile list and selects the newly saved profile."""
         self.profiles_list = self.get_available_profiles()
-        
-        # Update dropdown
         self.profile_dropdown.clear()
         self.profile_dropdown.addItems(self.profiles_list)
+        if saved_profile_name in self.profiles_list:
+            self.profile_dropdown.setCurrentText(saved_profile_name)
+        elif self.profiles_list: self.profile_dropdown.setCurrentIndex(0)
     
     def update_plot(self):
-        self.ax.clear()
-        
-        # Sort points by temperature (x-axis)
-        sorted_points = sorted(self.points, key=lambda p: p[0])
-        self.points = sorted_points
-        
-        # Extract x and y values
+        """Updates the fan curve plot with current points and highlights."""
+        self.points = sorted([(round(p[0]), round(p[1])) for p in self.points], key=lambda p: p[0])
         temps, speeds = zip(*self.points) if self.points else ([], [])
+        self.curve_item.setData(temps, speeds)
         
-        # Plot the curve
-        self.ax.plot(temps, speeds, 'b-', marker='o', markersize=8)
+        self.selected_point_item.clear()
+        highlight_idx = self.drag_point_index if self.drag_point_index is not None else self.hover_point_index
+        if highlight_idx is not None and 0 <= highlight_idx < len(self.points):
+            px, py = self.points[highlight_idx]
+            self.selected_point_item.addPoints([px], [py])
+
+    def _get_point_at_scene_pos(self, scene_pos: QPointF, sensitivity_pixels=7):
+        """Checks if scene_pos is near any curve point. Returns point index or None."""
+        if not self.view_box: return None
+        mouse_data_pos = self.view_box.mapSceneToView(scene_pos)
+        offset_scene_pos_x = QPointF(scene_pos.x() + sensitivity_pixels, scene_pos.y())
+        offset_scene_pos_y = QPointF(scene_pos.x(), scene_pos.y() + sensitivity_pixels)
+        offset_data_pos_x = self.view_box.mapSceneToView(offset_scene_pos_x)
+        offset_data_pos_y = self.view_box.mapSceneToView(offset_scene_pos_y)
+        data_sensitivity_x = abs(offset_data_pos_x.x() - mouse_data_pos.x())
+        data_sensitivity_y = abs(offset_data_pos_y.y() - mouse_data_pos.y())
+        mx, my = mouse_data_pos.x(), mouse_data_pos.y()
+        for i, (px, py) in enumerate(self.points):
+            if abs(mx - px) < data_sensitivity_x and abs(my - py) < data_sensitivity_y:
+                return i
+        return None
+
+    def pg_on_scene_click(self, event): 
+        """Handles mouse click events on the plot's scene."""
+        if not self.view_box or not self.view_box.sceneBoundingRect().contains(event.scenePos()):
+            return 
         
-        # Highlight hover point
-        if self.hover_point is not None:
-            idx = self.hover_point
-            self.ax.plot(self.points[idx][0], self.points[idx][1], 'ro', markersize=10)
-        
-        # Set labels and limits
-        self.ax.set_xlabel('Temperature (°C)')
-        self.ax.set_ylabel('Fan Speed (%)')
-        self.ax.set_xlim(0, 100)
-        self.ax.set_ylim(0, 100)
-        self.ax.grid(True)
-        self.ax.set_title('Fan Speed Curve')
-        
-        # Draw the plot
-        self.fig.tight_layout()
-        self.canvas.draw()
-    
-    def on_click(self, event):
-        if event.inaxes != self.ax:
+        # Crucially, accept the event IF it's within the plot. This stops the ViewBox from processing it.
+        event.accept()
+
+        clicked_point_idx = self._get_point_at_scene_pos(event.scenePos())
+        mouse_data_pos = self.view_box.mapSceneToView(event.scenePos())
+
+        if event.button() == Qt.LeftButton:
+            if clicked_point_idx is not None: # Clicked on an existing point to start drag
+                self.drag_point_index = clicked_point_idx # Set active drag point
+                pt_x, pt_y = self.points[self.drag_point_index]
+                self.coord_text_item.setText(f"({pt_x}, {pt_y})"); self.coord_text_item.setPos(pt_x, pt_y); self.coord_text_item.show()
+                self.update_plot()
+            elif event.double(): # Double-click to add point
+                new_temp = round(max(0, min(100, mouse_data_pos.x())))
+                new_speed = round(max(0, min(100, mouse_data_pos.y())))
+                if (new_temp, new_speed) not in self.points:
+                    self.points.append((new_temp, new_speed)); self.update_plot()
+
+        elif event.button() == Qt.RightButton: # Right-click to remove point
+            if clicked_point_idx is not None:
+                if len(self.points) > 2:
+                    self.points.pop(clicked_point_idx)
+                    if self.hover_point_index == clicked_point_idx: self.hover_point_index = None
+                    # If the dragged point is right-clicked (unlikely but possible), cancel drag.
+                    if self.drag_point_index == clicked_point_idx: self.drag_point_index = None 
+                    self.coord_text_item.hide(); self.update_plot()
+                else: QMessageBox.information(self, "Can't Remove", "Fan curve must have at least 2 points.")
+
+    def pg_on_scene_move(self, scene_pos: QPointF):
+        """Handles mouse move events on the plot's scene (for hover and drag)."""
+        if not self.view_box: return
+
+        # Check if mouse is within plot bounds before processing
+        if not self.view_box.sceneBoundingRect().contains(scene_pos):
+            self.coord_text_item.hide()
+            if self.hover_point_index is not None: self.hover_point_index = None; self.update_plot()
+            # If dragging and mouse leaves, we might want to stop drag or let it continue based on button state.
+            # For now, if drag_point_index is set, it will continue to update.
             return
-        
-        # Check if clicking near existing point
-        for i, (x, y) in enumerate(self.points):
-            if abs(event.xdata - x) < 3 and abs(event.ydata - y) < 3:
-                if event.button == 1:  # Left click to drag
-                    self.drag_point = i
-                    return
-                elif event.button == 3:  # Right click to delete
-                    if len(self.points) > 2:  # Keep at least 2 points
-                        self.points.pop(i)
-                        self.update_plot()
-                    else:
-                        QMessageBox.information(self, "Can't Remove", "Fan curve must have at least 2 points")
-                    return
-        
-        # If double click and not on point, add new point
-        if event.dblclick:
-            self.points.append((max(0, min(100, event.xdata)), max(0, min(100, event.ydata))))
+
+        mouse_data_pos = self.view_box.mapSceneToView(scene_pos)
+        vx, vy = mouse_data_pos.x(), mouse_data_pos.y()
+
+        if self.drag_point_index is not None: # If a point is being dragged
+            new_temp = round(max(0, min(100, vx)))
+            new_speed = round(max(0, min(100, vy)))
+            self.points[self.drag_point_index] = (new_temp, new_speed)
+            self.coord_text_item.setText(f"({new_temp}, {new_speed})"); self.coord_text_item.setPos(new_temp, new_speed)
+            if not self.coord_text_item.isVisible(): self.coord_text_item.show()
             self.update_plot()
+        else: # Not dragging, handle hover
+            old_hover_idx = self.hover_point_index
+            self.hover_point_index = self._get_point_at_scene_pos(scene_pos)
+            if old_hover_idx != self.hover_point_index: self.update_plot()
+            
+            if self.hover_point_index is not None and 0 <= self.hover_point_index < len(self.points):
+                pt_x, pt_y = self.points[self.hover_point_index]
+                self.coord_text_item.setText(f"({pt_x}, {pt_y})"); self.coord_text_item.setPos(pt_x, pt_y); self.coord_text_item.show()
+            else: self.coord_text_item.hide()
     
-    def on_hover(self, event):
-        if event.inaxes != self.ax:
-            self.hover_point = None
-            return
-        
-        # Check if dragging a point
-        if self.drag_point is not None:
-            # Update point position
-            temp = max(0, min(100, event.xdata))
-            speed = max(0, min(100, event.ydata))
-            self.points[self.drag_point] = (temp, speed)
+    def pg_on_widget_mouse_release(self, event: 'QMouseEvent'):
+        """Handles mouse release events specifically on the plot widget."""
+        if event.button() == Qt.LeftButton and self.drag_point_index is not None:
+            # Finalize position if needed, though pg_on_scene_move should be accurate
+            release_scene_pos = self.plot_widget.mapToScene(event.pos())
+            if self.view_box and self.view_box.sceneBoundingRect().contains(release_scene_pos):
+                 mouse_data_pos = self.view_box.mapSceneToView(release_scene_pos)
+                 final_temp = round(max(0, min(100, mouse_data_pos.x())))
+                 final_speed = round(max(0, min(100, mouse_data_pos.y())))
+                 if 0 <= self.drag_point_index < len(self.points):
+                     self.points[self.drag_point_index] = (final_temp, final_speed)
+
+            self.drag_point_index = None # Crucial: End the drag operation
+
+            # Update hover state based on current mouse position
+            self.hover_point_index = self._get_point_at_scene_pos(release_scene_pos) 
+            if self.hover_point_index is not None and 0 <= self.hover_point_index < len(self.points):
+                pt_x, pt_y = self.points[self.hover_point_index]
+                self.coord_text_item.setText(f"({pt_x}, {pt_y})"); self.coord_text_item.setPos(pt_x, pt_y); self.coord_text_item.show()
+            else: self.coord_text_item.hide()
             self.update_plot()
-            return
-        
-        # Otherwise check for hover
-        old_hover = self.hover_point
-        self.hover_point = None
-        for i, (x, y) in enumerate(self.points):
-            if abs(event.xdata - x) < 3 and abs(event.ydata - y) < 3:
-                self.hover_point = i
-                break
-        
-        if old_hover != self.hover_point:
-            self.update_plot()
-    
-    def on_release(self, event):
-        self.drag_point = None
-    
+
     def add_point(self):
-        if not self.points:
-            self.reset_curve()
-            return
-            
-        # Add a point in the middle
-        temps = [p[0] for p in self.points]
-        min_temp, max_temp = min(temps), max(temps)
-        new_temp = (min_temp + max_temp) / 2
-        
-        # Find where to insert
-        for i, p in enumerate(self.points):
-            if p[0] > new_temp:
-                prev_speed = self.points[i-1][1]
-                next_speed = p[1]
-                new_speed = (prev_speed + next_speed) / 2
-                self.points.insert(i, (new_temp, new_speed))
-                break
-        
-        self.update_plot()
+        """Adds a new point to the fan curve."""
+        # ... (Logic for adding points remains the same as previous correct version)
+        if not self.points: self.reset_curve(); return
+        self.points = sorted(self.points, key=lambda p: p[0])
+        new_point = None
+        if len(self.points) < 2:
+            last_t, last_s = self.points[0] if self.points else (0,0); new_t = round(min(100, last_t + 20)); new_s = round(min(100, last_s + 20))
+            if new_t == last_t and new_s == last_s: new_t,new_s = (50,50); new_point = (new_t, new_s)
+        else:
+            max_gap, insert_idx = 0, -1
+            for i in range(len(self.points)-1): gap = self.points[i+1][0] - self.points[i][0];_ = (max_gap := gap, insert_idx := i) if gap > max_gap else None # Python 3.8+
+            if insert_idx != -1 and max_gap > 5: p_prev, p_next = self.points[insert_idx], self.points[insert_idx+1]; new_t = round((p_prev[0]+p_next[0])/2.0); new_s = round((p_prev[1]+p_next[1])/2.0); new_point = (new_t, new_s)
+            else: last_t, last_s = self.points[-1]; new_point = (round(min(100,last_t+15)), round(min(100,last_s+15))) if last_t < 90 else ( (50,50) if (50,50) not in self.points else (70,70) )
+        if new_point and new_point not in self.points: self.points.append(new_point); self.update_plot()
     
-    def remove_point(self):
-        if self.hover_point is not None and len(self.points) > 2:
-            self.points.pop(self.hover_point)
-            self.hover_point = None
-            self.update_plot()
-        else:
-            QMessageBox.information(self, "Remove Point", 
-                                    "Hover over a point to select it first, or fan curve must have at least 2 points")
-    
-    def reset_curve(self):
-        self.points = [(20, 0), (40, 30), (60, 60), (80, 100)]  # Default curve
+    def reset_curve(self, update_dropdown=True):
+        """Resets the fan curve to a default state."""
+        self.points = [(20,0), (40,30), (60,60), (80,100)]
+        if update_dropdown: self.current_config = None; self.custom_profile_name.setText("MyCustomProfile")
+        self.hover_point_index = None; self.drag_point_index = None
+        self.coord_text_item.hide()
+        # Always update plot on reset, whether full or partial (like from load failure)
         self.update_plot()
-```
----
-## File: ryzen_master_commander/app/graphs.py
-
-```py
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QPen
-import pyqtgraph as pg
-import numpy as np
-
-class CombinedGraph(QWidget):
-    def __init__(self, parent=None):
-        super(CombinedGraph, self).__init__(parent)
-        self.temperature_readings = []
-        self.fanspeed_readings = []
-        self.time_points = []
-        
-        # Configure global PyQtGraph settings
-        pg.setConfigOptions(antialias=True)
-        
-        # Create layout
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(0, 0, 0, 0)
-        
-        # Create PlotWidget - use transparent background to respect app theme
-        self.plot_widget = pg.PlotWidget(background=None)
-        layout.addWidget(self.plot_widget)
-        
-        # Setup the plot
-        self.setup_plot()
-        
-    def setup_plot(self):
-        # Enable grid
-        self.plot_widget.showGrid(x=True, y=True, alpha=0.3)
-        
-        # Define colors for temperature and fan speed
-        temp_color = '#3498db'  # Blue
-        fan_color = '#e74c3c'   # Red
-        
-        # Setup left Y axis (Temperature)
-        left_axis = self.plot_widget.getAxis('left')
-        left_axis.setLabel(text='Temperature', units='°C', color=temp_color)
-        left_axis.setPen(pg.mkPen(color=temp_color, width=2))
-        left_axis.setTextPen(temp_color)
-        
-        # Setup right Y axis (Fan Speed)
-        self.plot_widget.showAxis('right') # Explicitly tell PlotItem to show the right axis
-        right_axis = self.plot_widget.getAxis('right')
-        right_axis.setLabel(text='Fan Speed', units='%', color=fan_color) # Set label
-        right_axis.setPen(pg.mkPen(color=fan_color, width=2))
-        right_axis.setTextPen(fan_color)
-        right_axis.setStyle(showValues=True) # Ensure tick values are shown
-        # Add tick values for fan speed (0%, 25%, 50%, 75%, 100%)
-        right_axis.setTicks([[(0, '0%'), (25, '25%'), (50, '50%'), (75, '75%'), (100, '100%')]])
-        
-        # Setup bottom X axis (Time)
-        bottom_axis = self.plot_widget.getAxis('bottom')
-        bottom_axis.setLabel('Time (seconds)')
-        
-        # Create ViewBox for Fan Speed
-        self.fan_view = pg.ViewBox()
-        self.plot_widget.scene().addItem(self.fan_view) # Add to scene
-        right_axis.linkToView(self.fan_view) # Link the axis to this view
-        self.fan_view.setXLink(self.plot_widget.getViewBox()) # Link X axes
-        # Fix fan speed range to 0-100%
-        self.fan_view.setYRange(0, 100, padding=0)
-        
-        # Create temperature plot
-        self.temp_curve = pg.PlotCurveItem(
-            pen=pg.mkPen(color=temp_color, width=3),
-            symbolBrush=temp_color,
-            symbolPen='w',
-            symbol='o',
-            symbolSize=7,
-            name="Temperature"
-        )
-        self.plot_widget.addItem(self.temp_curve)
-        
-        # Create fan speed plot (on secondary y-axis)
-        self.fan_curve = pg.PlotCurveItem(
-            pen=pg.mkPen(color=fan_color, width=3),
-            symbolBrush=fan_color,
-            symbolPen='w',
-            symbol='s',
-            symbolSize=7,
-            name="Fan Speed"
-        )
-        self.fan_view.addItem(self.fan_curve) # Add to the fan_view
-        
-        # Create legend and position it below the graph
-        self.legend = pg.LegendItem() # Create instance without initial offset
-        self.legend.setParentItem(self.plot_widget.graphicsItem()) # Parent is PlotItem
-        # Anchor top-center of legend to bottom-center of plot item, with a 10px downward offset
-        self.legend.anchor(itemPos=(0.5, 0), parentPos=(0.5, 1), offset=(0, 10)) 
-        
-        # Add items to legend
-        self.legend.addItem(self.temp_curve, "Temperature (°C)")
-        # Create a proxy item for fan speed for the legend
-        self.fan_proxy = pg.PlotDataItem( # Use PlotDataItem for legend proxy if curve itself is complex
-            pen=pg.mkPen(color=fan_color, width=3),
-            symbolBrush=fan_color,
-            symbolPen='w',
-            symbol='s',
-            symbolSize=7
-        )
-        self.legend.addItem(self.fan_proxy, "Fan Speed (%)")
-        
-        # Connect resize event to update views and ensure sync
-        self.plot_widget.getViewBox().sigResized.connect(self.updateViews)
-        
-        # Update views initially
-        self.updateViews()
-        
-    def updateViews(self):
-        # Keep the views in sync when resizing
-        # The main ViewBox (getViewBox()) controls the geometry of the plot area
-        # The fan_view needs to match this geometry
-        main_vb_rect = self.plot_widget.getViewBox().sceneBoundingRect()
-        self.fan_view.setGeometry(main_vb_rect)
-        
-        # This call is important to sync the X-axis state (range, etc.)
-        # from the main ViewBox to the fan_view's X-axis.
-        self.fan_view.linkedViewChanged(self.plot_widget.getViewBox(), self.fan_view.XAxis)
-        
-    def update_data(self, temperature, fan_speed):
-        if temperature == "n/a" and fan_speed == "n/a":
-            return
-        
-        # Add current time (seconds since start)
-        if not self.time_points:
-            self.time_points.append(0)
-        else:
-            self.time_points.append(self.time_points[-1] + 1)
-        
-        # Keep only the last 60 points
-        if len(self.time_points) > 60:
-            self.time_points = self.time_points[-60:]
-        
-        # Update temperature data
-        if temperature != "n/a":
-            self.temperature_readings.append(float(temperature))
-        else:
-            # If no reading, use the previous value or zero
-            self.temperature_readings.append(self.temperature_readings[-1] if self.temperature_readings else 0)
-            
-        # Keep only the last 60 points
-        if len(self.temperature_readings) > 60:
-            self.temperature_readings = self.temperature_readings[-60:]
-        
-        # Update fan speed data
-        if fan_speed != "n/a":
-            self.fanspeed_readings.append(float(fan_speed))
-        else:
-            # If no reading, use the previous value or zero
-            self.fanspeed_readings.append(self.fanspeed_readings[-1] if self.fanspeed_readings else 0)
-            
-        # Keep only the last 60 points
-        if len(self.fanspeed_readings) > 60:
-            self.fanspeed_readings = self.fanspeed_readings[-60:]
-        
-        # Ensure all data arrays have the same length matching the shortest one
-        min_len = min(len(self.time_points), len(self.temperature_readings), len(self.fanspeed_readings))
-        if min_len == 0: # Avoid issues if no data yet
-            time_data, temp_data, fan_data = [], [], []
-        else:
-            time_data = self.time_points[-min_len:]
-            temp_data = self.temperature_readings[-min_len:]
-            fan_data = self.fanspeed_readings[-min_len:]
-        
-        # Update plot data
-        self.temp_curve.setData(time_data, temp_data)
-        self.fan_curve.setData(time_data, fan_data)
-        if self.fan_proxy: # Check if fan_proxy exists before setting data
-             self.fan_proxy.setData(time_data, fan_data)  # Update the legend proxy
-        
-        # Auto-scale temperature y-axis
-        if temp_data:
-            max_temp = max(temp_data) + 5
-            min_temp = max(0, min(temp_data) - 5)
-            # Ensure max_temp is at least a reasonable value like 50, and min_temp is not negative
-            self.plot_widget.setYRange(min_temp, max(max_temp, 50.0)) 
-        else:
-            self.plot_widget.setYRange(0, 50) # Default if no data
-
-        # Make sure the fan scale stays 0-100
-        self.fan_view.setYRange(0, 100, padding=0)
-        
-        # Update ViewBox to ensure correct sizing and linking
-        self.updateViews()
 ```
 ---
 ## File: ryzen_master_commander/app/main_window.py
@@ -960,279 +723,17 @@ class MainWindow(QMainWindow):
         self.graph_visible = not self.graph_visible
     
     def open_fan_profile_editor(self):
-        self.fan_editor = FanProfileEditor()
+        active_nbfc_profile = None
+        current_profile_text = self.current_profile_label.text() # e.g. "Current Profile: SomeProfileName"
+        
+        prefix = "Current Profile: "
+        if current_profile_text.startswith(prefix):
+            profile_name_part = current_profile_text[len(prefix):].strip()
+            if profile_name_part and profile_name_part != "--" and profile_name_part != "n/a":
+                active_nbfc_profile = profile_name_part
+                
+        self.fan_editor = FanProfileEditor(current_nbfc_profile_name=active_nbfc_profile)
         self.fan_editor.show()
-```
----
-## File: ryzen_master_commander/app/profile_manager.py
-
-```py
-import json
-import os
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
-                           QComboBox, QLineEdit, QCheckBox, QPushButton, QInputDialog)
-from PyQt5.QtCore import pyqtSlot, Qt
-
-from ryzen_master_commander.app.system_utils import apply_tdp_settings
-
-class ProfileManager:
-    def __init__(self):
-        # Check multiple potential profile directories
-        potential_dirs = [
-            "./tdp_profiles",  # Development location
-            "/usr/share/ryzen-master-commander/tdp_profiles",  # System-wide installation
-            os.path.expanduser("~/.local/share/ryzen-master-commander/tdp_profiles")  # User installation
-        ]
-        
-        # Use the first directory that exists
-        self.profiles_directory = next((d for d in potential_dirs if os.path.exists(d)), "./tdp_profiles")
-        print(f"Using profiles from: {self.profiles_directory}")
-        
-        self.current_profile = None
-        self.cached_profiles = self.load_profiles()
-        
-    def create_widgets(self, parent):
-        self.parent = parent
-        layout = parent.layout()
-        
-        # Profile selection
-        profile_layout = QHBoxLayout()
-        profile_layout.addWidget(QLabel("Performance Profile:"))
-        
-        self.profile_dropdown = QComboBox()
-        # Explicitly connect with the correct type
-        self.profile_dropdown.currentIndexChanged.connect(self.on_profile_select)
-        profile_layout.addWidget(self.profile_dropdown)
-        layout.addLayout(profile_layout)
-        
-        # TDP settings
-        # Fast limit
-        fast_limit_layout = QHBoxLayout()
-        fast_limit_layout.addWidget(QLabel("Fast Limit (W):"))
-        self.fast_limit_entry = QLineEdit()
-        fast_limit_layout.addWidget(self.fast_limit_entry)
-        layout.addLayout(fast_limit_layout)
-        
-        # Slow limit
-        slow_limit_layout = QHBoxLayout()
-        slow_limit_layout.addWidget(QLabel("Slow Limit (W):"))
-        self.slow_limit_entry = QLineEdit()
-        slow_limit_layout.addWidget(self.slow_limit_entry)
-        layout.addLayout(slow_limit_layout)
-        
-        # Slow time
-        slow_time_layout = QHBoxLayout()
-        slow_time_layout.addWidget(QLabel("Slow Time (s):"))
-        self.slow_time_entry = QLineEdit()
-        slow_time_layout.addWidget(self.slow_time_entry)
-        layout.addLayout(slow_time_layout)
-        
-        # Tctl temp
-        tctl_temp_layout = QHBoxLayout()
-        tctl_temp_layout.addWidget(QLabel("Tctl Temp (°C):"))
-        self.tctl_temp_entry = QLineEdit()
-        tctl_temp_layout.addWidget(self.tctl_temp_entry)
-        layout.addLayout(tctl_temp_layout)
-        
-        # APU skin temp
-        apu_skin_temp_layout = QHBoxLayout()
-        apu_skin_temp_layout.addWidget(QLabel("APU Skin Temp (°C):"))
-        self.apu_skin_temp_entry = QLineEdit()
-        apu_skin_temp_layout.addWidget(self.apu_skin_temp_entry)
-        layout.addLayout(apu_skin_temp_layout)
-        
-        # Performance options
-        performance_group = QGroupBox("Performance Mode")
-        performance_layout = QHBoxLayout(performance_group)
-        
-        self.max_performance_var = QCheckBox("Max Performance")
-        self.max_performance_var.stateChanged.connect(
-            lambda: self.power_saving_var.setChecked(False) if self.max_performance_var.isChecked() else None
-        )
-        performance_layout.addWidget(self.max_performance_var)
-        
-        self.power_saving_var = QCheckBox("Power Saving")
-        self.power_saving_var.stateChanged.connect(
-            lambda: self.max_performance_var.setChecked(False) if self.power_saving_var.isChecked() else None
-        )
-        performance_layout.addWidget(self.power_saving_var)
-        
-        layout.addWidget(performance_group)
-        
-        # Buttons
-        button_layout = QHBoxLayout()
-        
-        apply_tdp_button = QPushButton("Apply TDP Settings")
-        apply_tdp_button.clicked.connect(lambda: apply_tdp_settings(self.current_profile))
-        button_layout.addWidget(apply_tdp_button)
-        
-        save_profile_button = QPushButton("Save Profile")
-        save_profile_button.clicked.connect(self.save_profile)
-        button_layout.addWidget(save_profile_button)
-        
-        layout.addLayout(button_layout)
-        layout.addStretch()
-        
-        # Populate profile dropdown
-        self.update_profile_dropdown()
-        
-    def load_profiles(self):
-        profiles = []
-        if not os.path.exists(self.profiles_directory):
-            os.makedirs(self.profiles_directory)
-            print(f"Created profiles directory: {self.profiles_directory}")
-        
-        # Debug: list all files in the directory
-        files = os.listdir(self.profiles_directory)
-        print(f"Found {len(files)} files in profiles directory: {files}")
-        
-        for file in files:
-            if file.endswith(".json"):
-                file_path = os.path.join(self.profiles_directory, file)
-                try:
-                    with open(file_path, "r") as f:
-                        file_content = f.read()
-                        profile = json.loads(file_content)
-                        
-                        # Validate profile has required fields
-                        if "name" not in profile:
-                            print(f"Warning: Profile '{file}' missing required 'name' field")
-                            profile["name"] = os.path.splitext(file)[0]  # Use filename as name
-                        
-                        profiles.append(profile)
-                        print(f"Successfully loaded profile: {profile['name']}")
-                except json.JSONDecodeError as e:
-                    print(f"Error loading profile '{file}': {e}")
-                    print(f"Content causing error: {file_content[:100]}...")
-                except Exception as e:
-                    print(f"Unexpected error loading profile '{file}': {e}")
-        
-        print(f"Loaded {len(profiles)} profiles total")
-        return profiles  # Return the loaded profiles
-
-    def update_profile_dropdown(self):
-        if self.cached_profiles:
-            self.profile_dropdown.clear()
-            for profile in self.cached_profiles:
-                self.profile_dropdown.addItem(profile["name"])
-            
-            # Select first profile by default if none is selected
-            if self.profile_dropdown.currentIndex() == -1 and self.profile_dropdown.count() > 0:
-                self.profile_dropdown.setCurrentIndex(0)
-
-    # Fixed method to properly handle the signal
-    def on_profile_select(self, index):
-        """Handle profile selection from dropdown"""
-        if index < 0 or not self.cached_profiles or index >= len(self.cached_profiles):
-            return
-            
-        selected_profile = self.cached_profiles[index]
-        self.current_profile = selected_profile
-        
-        # Update the entries with profile values
-        self.fast_limit_entry.setText(str(self.current_profile["fast-limit"]))
-        self.slow_limit_entry.setText(str(self.current_profile["slow-limit"]))
-        self.slow_time_entry.setText(str(self.current_profile["slow-time"]))
-        self.tctl_temp_entry.setText(str(self.current_profile["tctl-temp"]))
-        self.apu_skin_temp_entry.setText(str(self.current_profile["apu-skin-temp"]))
-        self.max_performance_var.setChecked(self.current_profile["max-performance"])
-        self.power_saving_var.setChecked(self.current_profile["power-saving"])
-        
-        # Apply the profile
-        apply_tdp_settings(self.current_profile)
-
-    def save_profile(self):
-        profile_name, ok = QInputDialog.getText(
-            self.parent, "Save Profile", "Enter profile name:"
-        )
-        
-        if ok and profile_name:
-            profile = {
-                "name": profile_name,
-                "fast-limit": int(self.fast_limit_entry.text()),
-                "slow-limit": int(self.slow_limit_entry.text()),
-                "slow-time": int(self.slow_time_entry.text()),
-                "tctl-temp": int(self.tctl_temp_entry.text()),
-                "apu-skin-temp": int(self.apu_skin_temp_entry.text()),
-                "max-performance": self.max_performance_var.isChecked(),
-                "power-saving": self.power_saving_var.isChecked()
-            }
-            
-            # Save profile to file
-            with open(os.path.join(self.profiles_directory, f"{profile_name}.json"), "w") as f:
-                json.dump(profile, f, indent=2)
-            
-            # Update cached profiles
-            self.cached_profiles = self.load_profiles()
-            
-            # Update dropdown with new profile
-            self.update_profile_dropdown()
-            
-            # Select the new profile
-            index = self.profile_dropdown.findText(profile_name)
-            if index >= 0:
-                self.profile_dropdown.setCurrentIndex(index)
-```
----
-## File: ryzen_master_commander/app/system_utils.py
-
-```py
-import subprocess
-import re
-import os
-
-def get_system_readings():
-    try:
-        output = subprocess.check_output(['nbfc', 'status', '-a'], text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to execute 'nbfc status -a': {e}")
-        return "n/a", "n/a", "n/a"
-    except FileNotFoundError:
-        print("nbfc command not found. Make sure NoteBook FanControl is installed.")
-        return "n/a", "n/a", "n/a"
-
-    temperature_match = re.search(r'Temperature\s+:\s+(\d+\.?\d*)', output)
-    fan_speed_match = re.search(r'Current Fan Speed\s+:\s+(\d+\.?\d*)', output)
-    current_profile_match = re.search(r'Selected Config Name\s+:\s+(.*?)$', output, re.MULTILINE)
-
-    temperature = temperature_match.group(1) if temperature_match else "n/a"
-    fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
-    current_profile = current_profile_match.group(1) if current_profile_match else "n/a"
-    return temperature, fan_speed, current_profile
-
-def apply_tdp_settings(current_profile):
-    if current_profile:
-        command = ['pkexec', 'ryzenadj']
-        for key, value in current_profile.items():
-            if key in ["fast-limit", "slow-limit"]:
-                command.extend([f'--{key}={value * 1000}'])
-            elif key == "slow-time":
-                command.extend([f'--{key}={value * 1000}'])
-            elif key not in ["name", "max-performance", "power-saving"]:
-                command.extend([f'--{key}={value}'])
-        if current_profile.get("power-saving"):
-            command.append("--power-saving")
-        elif current_profile.get("max-performance"):
-            command.append("--max-performance")
-        try:
-            subprocess.run(command)
-            print(f"Applied TDP settings with command: {' '.join(command)}")
-            return True, "TDP settings applied successfully"
-        except subprocess.CalledProcessError as e:
-            error_msg = f"Error applying TDP settings: {e}"
-            print(error_msg)
-            return False, error_msg
-    return False, "No profile selected"
-
-def apply_fan_profile(profile_name):
-    """Apply a fan profile by name with nbfc command"""
-    try:
-        # Use the profile name (without extension) with nbfc config command
-        profile_name = os.path.splitext(os.path.basename(profile_name))[0]
-        subprocess.run(['pkexec', 'nbfc', 'config', '-a', profile_name], check=True)
-        return True, f"Fan profile '{profile_name}' applied successfully"
-    except Exception as e:
-        return False, f"Error applying fan profile: {str(e)}"
 ```
 ---
 ## File: ryzen_master_commander/main.py
@@ -1246,8 +747,11 @@ from ryzen_master_commander.app.main_window import MainWindow
 
 def main():
     # Create Qt application
+    # For Wayland/X11 icon and .desktop file association:
+    # Set the desktop file name (without .desktop extension)
+    QApplication.setDesktopFileName("ryzen-master-commander")
     app = QApplication(sys.argv)
-    app.setApplicationName("Ryzen Master Commander")
+    app.setApplicationName("ryzen-master-commander") # Match StartupWMClass and Icon name
     
     # Set application icon
     icon_paths = [
@@ -1264,6 +768,7 @@ def main():
     # Configure PyQtGraph for dark/light mode
     try:
         import pyqtgraph as pg
+        import subprocess # Added for KDE theme detection
         # Check for KDE dark mode
         is_dark_mode = False
         
@@ -1310,88 +815,5 @@ def main():
 
 if __name__ == "__main__":
     main()
-```
----
-## File: setup.py
-
-```py
-from setuptools import setup, find_packages
-import os
-
-# Get the absolute path to the directory where setup.py is located
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# Define proper paths based on setup.py location
-fan_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/fan_profiles')
-tdp_profiles_path = os.path.join(BASE_DIR, 'share/ryzen-master-commander/tdp_profiles')
-
-# Create data files structure properly
-# Add this to your data_files list in setup.py
-data_files = [
-    ('share/applications', [os.path.join(BASE_DIR, 'share/applications/ryzen-master-commander.desktop')]),
-    ('share/ryzen-master-commander/fan_profiles', 
-     [os.path.join(fan_profiles_path, file) for file in os.listdir(fan_profiles_path) if os.path.isfile(os.path.join(fan_profiles_path, file))]),
-    ('share/ryzen-master-commander/tdp_profiles', 
-     [os.path.join(tdp_profiles_path, file) for file in os.listdir(tdp_profiles_path) if os.path.isfile(os.path.join(tdp_profiles_path, file))]),
-    ('bin', [os.path.join(BASE_DIR, 'bin/ryzen-master-commander'), 
-             os.path.join(BASE_DIR, 'bin/ryzen-master-commander-helper')]),
-    # Add this line for the polkit policy
-    ('share/polkit-1/actions', [os.path.join(BASE_DIR, 'polkit/com.merrythieves.ryzenadj.policy')]),
-]
-
-# Add icon files
-for size in ['16x16', '32x32', '64x64', '128x128']:
-    icon_dir = os.path.join(BASE_DIR, f'share/icons/hicolor/{size}/apps')
-    if os.path.exists(icon_dir):
-        data_files.append((f'share/icons/hicolor/{size}/apps', 
-                          [os.path.join(icon_dir, 'ryzen-master-commander.png')]))
-
-setup(
-    name="ryzen-master-commander",
-    version="1.0.1",
-    author="sam1am",
-    author_email="noreply@merrythieves.com",
-    description="TDP and fan control for AMD Ryzen processors",
-    url="https://github.com/sam1am/Ryzen-Master-Commander",
-    packages=['ryzen_master_commander', 'ryzen_master_commander.app'],
-    include_package_data=True,
-    classifiers=[
-        "Programming Language :: Python :: 3",
-        "License :: OSI Approved :: MIT License",
-        "Operating System :: POSIX :: Linux",
-    ],
-    install_requires=[
-        "PyQt5",
-        "pyqtgraph",
-        "numpy",
-        "Pillow",
-        "pystray",
-    ],
-    python_requires=">=3.6",
-    data_files=data_files,
-    entry_points={
-        'console_scripts': [
-            'ryzen-master-commander=ryzen_master_commander.main:main',
-        ],
-    },
-)
-```
----
-## File: share/applications/ryzen-master-commander.desktop
-
-```desktop
-[Desktop Entry]
-Name=Ryzen Master Commander
-Comment=AMD Ryzen TDP and Fan Control
-GenericName=Hardware Control
-Exec=ryzen-master-commander %U
-Icon=ryzen-master-commander
-Terminal=false
-Type=Application
-Categories=System;Settings;HardwareSettings;
-Keywords=AMD;Ryzen;TDP;Fan;Control;
-StartupNotify=true
-StartupWMClass=ryzen-master-commander
-Path=/usr/share/ryzen-master-commander
 ```
 ---
