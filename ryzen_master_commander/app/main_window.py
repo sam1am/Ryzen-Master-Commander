@@ -12,6 +12,7 @@ from ryzen_master_commander.app.graphs import CombinedGraph
 from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
 from ryzen_master_commander.app.profile_manager import ProfileManager
 from ryzen_master_commander.app.fan_profile_editor import FanProfileEditor
+from ryzen_master_commander.app.nbfc_manager import NBFCManager
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -22,8 +23,7 @@ class MainWindow(QMainWindow):
         self.fan_speed_adjustment_delay = None
         self.graph_visible = True
 
-        if not self.check_nbfc_running():
-            self.start_nbfc_service()
+        NBFCManager.setup_nbfc(self)
         
         # Set up the UI
         self.init_ui()
@@ -33,7 +33,7 @@ class MainWindow(QMainWindow):
         
         # Set auto control by default
         self.radio_auto_control.setChecked(True)
-        self.set_auto_control()
+        # self.set_auto_control()
         
         # Start reading system values
         self.refresh_timer = QTimer(self)
@@ -51,6 +51,7 @@ class MainWindow(QMainWindow):
                                    text=True)
             return "ERROR: connect()" not in result.stderr
         except Exception:
+            print(f"nbfc not running: {result.stderr}")
             return False
     
     def start_nbfc_service(self):
@@ -64,6 +65,8 @@ class MainWindow(QMainWindow):
         # msg.setDefaultButton(QMessageBox.Yes)
         
         # if msg.exec_() == QMessageBox.Yes:
+
+        print("Attempting to start NBFC service...")
         try:
             subprocess.run(['pkexec', 'nbfc', 'start'], check=True)
             # QMessageBox.information(self, "Success", "NBFC service started successfully.")
