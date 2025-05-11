@@ -1,5 +1,6 @@
 builds/ryzen-master-commander/pkg/
 builds/ryzen-master-commander/src/
+.summary_files/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
