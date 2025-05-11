@@ -27,7 +27,7 @@ class FanProfileEditor(QMainWindow):
         self.init_ui()
     
     def init_ui(self):
-        self.setWindowTitle("NBFC Fan Profile Editor")
+        self.setWindowTitle("Fan Curve Editor")
         self.resize(800, 650)
         
         central_widget = QWidget()
@@ -35,7 +35,7 @@ class FanProfileEditor(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         
         # Title
-        title_label = QLabel("NBFC Fan Profile Editor")
+        title_label = QLabel("Fan Curve Editor")
         title_label.setAlignment(Qt.AlignCenter)
         font = title_label.font(); font.setPointSize(16); font.setBold(True)
         title_label.setFont(font)

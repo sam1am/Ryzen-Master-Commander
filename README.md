@@ -1,6 +1,6 @@
 # Ryzen Master & Commander 🚀
 
-Ryzen Master & Commander is a Linux GUI application for monitoring and controlling Ryzen-based systems, with a focus on handhelds with newer Ryzen chipsets like those from GPD. It provides features such as temperature and fan speed monitoring, fan control, and TDP (Thermal Design Power) settings management. 🌡️💨🔧
+Ryzen Master & Commander is a Linux GUI application for monitoring and controlling Ryzen-based systems. It provides features such as temperature and fan speed monitoring, fan control, a fancy fan curve editor, and TDP control.
 
 ![Main UI](img/main_ui.png)
 *The main user interface of Ryzen Master Commander*
@@ -12,6 +12,8 @@ Ryzen Master & Commander is a Linux GUI application for monitoring and controlli
 - Fan profile editor for creating custom fan curves for NBFC ✏️
 - TDP settings management with customizable profiles ⚙️
 - User-friendly GUI built with PyQt5 🎨
+
+![Fan Curve Editor][img/fan_curve.png]
 
 ## Quick Start 🚀
 
@@ -33,27 +35,31 @@ paru -S ryzen-master-commander
 
 This will also install `nbfc` (from community or AUR) and `ryzenadj` (from community or AUR) if they are listed as dependencies in the PKGBUILD and are not already installed.
 
+#### Debian (Ubuntu, Mint, etc.)
+
+A .deb is available in the latest build. It has not yet been tested and is considered experimental. Report any issues you run into. 
+
 ### Running the Application
 
-Launch Ryzen Master Commander by running the following command in your terminal:
+Launch Ryzen Master Commander by running it from your desktop environment or running the following command in your terminal:
 
 ```bash
 ryzen-master-commander
 ```
 
-The application will prompt you for your sudo password (via `pkexec`) when necessary, which is required for controlling the fan speed and applying TDP settings. 🔑
+The application will prompt you for your sudo password when necessary, which is required for controlling the fan speed and applying TDP settings. 
 
-That's it! You're now ready to use Ryzen Master Commander to monitor and control your Ryzen-based system. Enjoy! 😊
+## Usage
 
-## Usage 🚀
+The top of the window shows a graph with a recent history of fan speed and temperature. 
 
-After installation, launch Ryzen Master Commander from your application menu or by running the command:
+The view can be dragged via the handle in the middle to resize or hide the top or bottom panel. 
 
-```bash
-ryzen-master-commander
-```
+Bottom left: TDP controls let you select a saved performance profile, manually set values for Fast Limit, Slow Limit, Slow Time, Tctl Temp, and APU Skin Temp. Addiotnally, you can set Max Performance or Power Saving Mode. You can apply settings and save new profiles. 
 
-The application uses `pkexec` for operations requiring root privileges (like applying TDP settings with `ryzenadj` or controlling fans with `nbfc`). You will be prompted for your password by the system's polkit agent.
+Bottom right: There is a fan profile editor for creating fan curves. The rrfresh interval controls how often the graph is refreshed. The fan speed can be set to manual, which will be controlled by the Manual Fan Speed slider or Auto, which will follow the current fan curve profile. A hide graphs button lets you toggle the visibility of the graphs. 
+
+At the bottom you will see the current temperature, fan speed, and current fan curve profile. 
 
 ## Contributing 🤝
 
