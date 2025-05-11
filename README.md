@@ -13,7 +13,7 @@ Ryzen Master & Commander is a Linux GUI application for monitoring and controlli
 - TDP settings management with customizable profiles ⚙️
 - User-friendly GUI built with PyQt5 🎨
 
-![Fan Curve Editor][img/fan_curve.png]
+![Fan Curve Editor](img/fan_curve.png)
 
 ## Quick Start 🚀
 
