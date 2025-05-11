@@ -11,3 +11,4 @@ Keywords=AMD;Ryzen;TDP;Fan;Control;
 StartupNotify=true
 StartupWMClass=ryzen-master-commander
 Path=/usr/share/ryzen-master-commander
+X-GNOME-UsesNotifications=true

@@ -1,10 +1,12 @@
-import os
+# import os
 import subprocess
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
                             QSlider, QComboBox, QGroupBox, QCheckBox, QPushButton, 
-                            QRadioButton, QStatusBar, QFrame, QSplitter, QApplication)
+                            QRadioButton, QStatusBar, QFrame, QSplitter, QApplication,
+                            QSystemTrayIcon, QMenu, QAction)
 from PyQt5.QtCore import Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QFont
+from PyQt5.QtGui import QFont, QIcon
+# import sys
 
 from ryzen_master_commander.app.graphs import CombinedGraph
 from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
@@ -23,6 +25,9 @@ class MainWindow(QMainWindow):
         # Set up the UI
         self.init_ui()
         
+        # Set up system tray
+        self.setup_system_tray()
+        
         # Set auto control by default
         self.radio_auto_control.setChecked(True)
         self.set_auto_control()
@@ -34,7 +39,100 @@ class MainWindow(QMainWindow):
         
         # Schedule first reading
         QTimer.singleShot(1000, self.update_readings)
-    
+
+    def setup_system_tray(self):
+        """Set up the system tray icon and menu"""
+        # Create the tray icon
+        self.tray_icon = QSystemTrayIcon(self)
+        
+        # Get the application icon
+        app_icon = QApplication.windowIcon()
+        if not app_icon.isNull():
+            self.tray_icon.setIcon(app_icon)
+        else:
+            # Try to find icon in standard locations
+            for path in ["/usr/share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+                        "./share/icons/hicolor/128x128/apps/ryzen-master-commander.png",
+                        "./img/icon.png"]:
+                if os.path.exists(path):
+                    self.tray_icon.setIcon(QIcon(path))
+                    break
+        
+        # Create the tray menu
+        tray_menu = QMenu()
+        
+        # Add actions to the tray menu
+        show_action = QAction("Show", self)
+        show_action.triggered.connect(self.show_from_tray)
+        tray_menu.addAction(show_action)
+        
+        toggle_auto_action = QAction("Auto Fan Control", self)
+        toggle_auto_action.setCheckable(True)
+        toggle_auto_action.setChecked(self.radio_auto_control.isChecked())
+        toggle_auto_action.triggered.connect(self.toggle_auto_control_from_tray)
+        tray_menu.addAction(toggle_auto_action)
+        self.toggle_auto_action = toggle_auto_action
+        
+        tray_menu.addSeparator()
+        
+        quit_action = QAction("Quit", self)
+        quit_action.triggered.connect(self.quit_application)
+        tray_menu.addAction(quit_action)
+        
+        # Set the context menu for the tray icon
+        self.tray_icon.setContextMenu(tray_menu)
+        
+        # Connect signals
+        self.tray_icon.activated.connect(self.tray_icon_activated)
+        
+        # Show the tray icon
+        self.tray_icon.show()
+        
+        # Update tooltip with temperature and fan speed
+        self.update_tray_tooltip()
+
+    def update_tray_tooltip(self):
+        """Update tray icon tooltip with current system information"""
+        temp_text = self.temp_label.text().replace("Temperature: ", "")
+        fan_text = self.fan_speed_label.text().replace("Fan Speed: ", "")
+        profile_text = self.current_profile_label.text().replace("Current Profile: ", "")
+        
+        tooltip = f"Ryzen Master Commander\n{temp_text} | {fan_text}\nProfile: {profile_text}"
+        self.tray_icon.setToolTip(tooltip)
+
+    def tray_icon_activated(self, reason):
+        """Handle tray icon activation"""
+        if reason == QSystemTrayIcon.Trigger:  # Left click
+            if self.isVisible():
+                self.hide()
+            else:
+                self.show_from_tray()
+
+    def show_from_tray(self):
+        """Show the main window from tray"""
+        self.showNormal()
+        self.activateWindow()
+        self.raise_()
+
+    def toggle_auto_control_from_tray(self, checked):
+        """Toggle auto control from tray menu"""
+        if checked:
+            self.radio_auto_control.setChecked(True)
+        else:
+            self.radio_manual_control.setChecked(True)
+
+    def quit_application(self):
+        """Quit the application"""
+        QApplication.quit()
+
+    def closeEvent(self, event):
+        """Override close event to minimize to tray instead of closing"""
+        if self.tray_icon.isVisible():
+            self.hide()
+            event.ignore()
+        else:
+            event.accept()
+
     def init_ui(self):
         # Set window properties
         self.setWindowTitle("Ryzen Master Commander")
@@ -176,6 +274,14 @@ class MainWindow(QMainWindow):
         
         # Update combined graph
         self.combined_graph.update_data(temperature, fan_speed)
+        
+        # Update tray tooltip
+        self.update_tray_tooltip()
+        
+        # Update tray menu auto control checkbox state
+        if hasattr(self, 'toggle_auto_action'):
+            self.toggle_auto_action.setChecked(self.radio_auto_control.isChecked())
+
     
     def update_refresh_interval(self):
         refresh_seconds = self.refresh_slider.value() * 1000  # Convert to milliseconds

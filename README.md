@@ -14,6 +14,7 @@ Ryzen Master & Commander is a Linux GUI application for monitoring and controlli
 - User-friendly GUI built with PyQt5 🎨
 
 ![Fan Curve Editor](img/fan_curve.png)
+*The Fan Curve Editor*
 
 ## Quick Start 🚀
 

@@ -24,6 +24,8 @@ def main():
             app.setWindowIcon(QIcon(path))
             break
     
+    app.setQuitOnLastWindowClosed(False)
+
     # Configure PyQtGraph for dark/light mode
     try:
         import pyqtgraph as pg
