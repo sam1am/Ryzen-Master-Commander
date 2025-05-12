@@ -1,21 +1,18 @@
-from setuptools import setup, find_packages
+from setuptools import setup, find_namespace_packages
+from src.version import __version__
 import os
 
 # All paths for data_files must be relative to this setup.py file.
-
 fan_profiles_source_dir = 'share/ryzen-master-commander/fan_profiles'
 tdp_profiles_source_dir = 'share/ryzen-master-commander/tdp_profiles'
 
 data_files = [
-    # Target installation directory, [list of source files relative to setup.py]
     ('share/applications', ['share/applications/ryzen-master-commander.desktop']),
-    (fan_profiles_source_dir, # Target dir is same as source for these
+    (fan_profiles_source_dir, 
      [os.path.join(fan_profiles_source_dir, f) for f in os.listdir(fan_profiles_source_dir) if os.path.isfile(os.path.join(fan_profiles_source_dir, f))]),
-    (tdp_profiles_source_dir, # Target dir is same as source for these
+    (tdp_profiles_source_dir, 
      [os.path.join(tdp_profiles_source_dir, f) for f in os.listdir(tdp_profiles_source_dir) if os.path.isfile(os.path.join(tdp_profiles_source_dir, f))]),
-    # REMOVED 'bin/ryzen-master-commander' from here.
-    # Keep ryzen-master-commander-helper if it's a separate script not managed by entry_points
-    ('bin', ['bin/ryzen-master-commander-helper']), # Assuming helper is still needed as a separate file
+    ('bin', ['bin/ryzen-master-commander-helper']),
     ('share/polkit-1/actions', ['polkit/com.merrythieves.ryzenadj.policy']),
 ]
 
@@ -27,14 +24,15 @@ for size in ['16x16', '32x32', '64x64', '128x128']:
         data_files.append((icon_target_dir, [icon_source_file_rel]))
 
 setup(
-    #get version from ./ver.txt
-    version = open('version.txt').read().strip(),
+    version=__version__,
     name="ryzen-master-commander",
     author="sam1am",
     author_email="noreply@merrythieves.com",
     description="TDP and fan control for AMD Ryzen processors",
     url="https://github.com/sam1am/Ryzen-Master-Commander",
-    packages=['ryzen_master_commander', 'ryzen_master_commander.app'],
+    # package_dir={"": "src"},  # Tell setuptools packages are under src
+    # packages=find_namespace_packages(where="src"),  # Find all packages under src
+    packages=["src", "src.app"],
     include_package_data=True,
     classifiers=[
         "Programming Language :: Python :: 3",
@@ -53,7 +51,7 @@ setup(
     data_files=data_files,
     entry_points={
         'console_scripts': [
-            'ryzen-master-commander=ryzen_master_commander.main:main', # This will create /usr/bin/ryzen-master-commander
+            'ryzen-master-commander=src.main:main',
         ],
     },
 )

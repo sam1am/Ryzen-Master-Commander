@@ -1,5 +1,5 @@
-include LICENSE README.md requirements.txt
-recursive-include ryzen_master_commander *.py
+include LICENSE README.md requirements.txt version.txt
+recursive-include src *.py
 recursive-include share *
 recursive-include bin *
 recursive-include polkit *
