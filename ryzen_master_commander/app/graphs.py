@@ -1,8 +1,8 @@
-from PyQt5.QtWidgets import QWidget, QVBoxLayout
-from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QFont, QColor, QPen
+from PyQt6.QtWidgets import QWidget, QVBoxLayout
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QFont, QColor, QPen
 import pyqtgraph as pg
-import numpy as np
+# import numpy as np
 
 class CombinedGraph(QWidget):
     def __init__(self, parent=None):

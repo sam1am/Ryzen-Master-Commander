@@ -1,7 +1,7 @@
 import os
 import subprocess
 import json
-from PyQt5.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QListWidget, QPushButton, QLabel
+from PyQt6.QtWidgets import QMessageBox, QDialog, QVBoxLayout, QListWidget, QPushButton, QLabel
 
 class NBFCManager:
     """Class to manage NBFC (Notebook Fan Control) setup and configuration"""

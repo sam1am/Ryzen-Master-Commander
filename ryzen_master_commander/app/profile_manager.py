@@ -1,8 +1,8 @@
 import json
 import os
-from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox, QLabel, 
                            QComboBox, QLineEdit, QCheckBox, QPushButton, QInputDialog)
-from PyQt5.QtCore import pyqtSlot, Qt
+from PyQt6.QtCore import pyqtSlot, Qt
 
 from ryzen_master_commander.app.system_utils import apply_tdp_settings
 

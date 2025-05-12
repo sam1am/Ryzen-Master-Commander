@@ -2,10 +2,10 @@ import os
 import glob
 import json
 import subprocess
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                             QLabel, QComboBox, QPushButton, QLineEdit, QMessageBox)
-from PyQt5.QtCore import Qt, QPointF
-from PyQt5.QtGui import QCursor
+from PyQt6.QtCore import Qt, QPointF, QEvent
+# from PyQt6.QtGui import QCursor
 
 import pyqtgraph as pg
 
@@ -36,7 +36,7 @@ class FanProfileEditor(QMainWindow):
         
         # Title
         title_label = QLabel("Fan Curve Editor")
-        title_label.setAlignment(Qt.AlignCenter)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         font = title_label.font(); font.setPointSize(16); font.setBold(True)
         title_label.setFont(font)
         main_layout.addWidget(title_label)
@@ -93,7 +93,7 @@ class FanProfileEditor(QMainWindow):
         # Instructions
         instructions_layout = QVBoxLayout()
         drag_instruction = QLabel("<i>Drag to move. Double click to add. Right click to remove.</i>")
-        drag_instruction.setAlignment(Qt.AlignCenter)
+        drag_instruction.setAlignment(Qt.AlignmentFlag.AlignCenter)
         instructions_layout.addWidget(drag_instruction)
         
         # Reset button
@@ -126,7 +126,7 @@ class FanProfileEditor(QMainWindow):
             event_type = event.type()
             
             # Mouse press - start drag operation
-            if event_type == event.MouseButtonPress and event.button() == Qt.LeftButton:
+            if event_type == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.LeftButton:
                 scene_pos = self.plot_widget.mapToScene(event.pos())
                 idx = self._get_point_at_scene_pos(scene_pos)
                 if idx is not None:
@@ -135,13 +135,13 @@ class FanProfileEditor(QMainWindow):
                     self._update_hover_point(scene_pos)
                     return True  # Event handled
                 # Check for double click to add point
-                elif event.doubleClick():
+                elif event.type() == QEvent.Type.MouseButtonDblClick:  # Changed from doubleClick() method
                     data_pos = self.view_box.mapSceneToView(scene_pos)
                     self._add_point_at(data_pos.x(), data_pos.y())
                     return True
             
             # Mouse move - update point position during drag
-            elif event_type == event.MouseMove:
+            elif event_type == QEvent.Type.MouseMove:
                 scene_pos = self.plot_widget.mapToScene(event.pos())
                 if self.is_dragging and self.drag_point_index is not None:
                     data_pos = self.view_box.mapSceneToView(scene_pos)
@@ -151,7 +151,7 @@ class FanProfileEditor(QMainWindow):
                     self._update_hover_point(scene_pos)
             
             # Mouse release - end drag operation
-            elif event_type == event.MouseButtonRelease and event.button() == Qt.LeftButton:
+            elif event_type == QEvent.Type.MouseButtonRelease and event.button() == Qt.MouseButton.LeftButton:
                 if self.is_dragging:
                     scene_pos = self.plot_widget.mapToScene(event.pos())
                     data_pos = self.view_box.mapSceneToView(scene_pos)
@@ -169,7 +169,7 @@ class FanProfileEditor(QMainWindow):
                     return True
             
             # Right-click to remove a point
-            elif event_type == event.MouseButtonPress and event.button() == Qt.RightButton:
+            elif event_type == QEvent.Type.MouseButtonPress and event.button() == Qt.MouseButton.RightButton:
                 scene_pos = self.plot_widget.mapToScene(event.pos())
                 idx = self._get_point_at_scene_pos(scene_pos)
                 if idx is not None:
@@ -231,11 +231,11 @@ class FanProfileEditor(QMainWindow):
             self.coord_text_item.setPos(pt_x, pt_y)
             self.coord_text_item.show()
             # Change cursor to hand cursor to indicate draggable point
-            self.plot_widget.setCursor(Qt.OpenHandCursor)
+            self.plot_widget.setCursor(Qt.CursorShape.OpenHandCursor)
         else:
             self.coord_text_item.hide()
             # Reset cursor to default
-            self.plot_widget.setCursor(Qt.ArrowCursor)
+            self.plot_widget.setCursor(Qt.CursorShape.ArrowCursor)
         
         if old_hover_idx != self.hover_point_index:
             self.update_plot()

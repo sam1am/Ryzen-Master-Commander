@@ -1,15 +1,15 @@
 import os
 import subprocess
-from PyQt5.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
-                            QSlider, QComboBox, QGroupBox, QCheckBox, QPushButton, 
+from PyQt6.QtWidgets import (QMainWindow, QWidget, QHBoxLayout, QVBoxLayout, QLabel, 
+                            QSlider, QGroupBox, QPushButton, 
                             QRadioButton, QStatusBar, QFrame, QSplitter, QApplication,
-                            QSystemTrayIcon, QMenu, QAction, QMessageBox)
-from PyQt5.QtCore import Qt, QTimer, pyqtSlot
-from PyQt5.QtGui import QFont, QIcon
+                            QSystemTrayIcon, QMenu, QMessageBox)
+from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QIcon, QAction
 # import sys
 
 from ryzen_master_commander.app.graphs import CombinedGraph
-from ryzen_master_commander.app.system_utils import get_system_readings, apply_tdp_settings
+from ryzen_master_commander.app.system_utils import get_system_readings
 from ryzen_master_commander.app.profile_manager import ProfileManager
 from ryzen_master_commander.app.fan_profile_editor import FanProfileEditor
 from ryzen_master_commander.app.nbfc_manager import NBFCManager
@@ -179,7 +179,7 @@ class MainWindow(QMainWindow):
         main_layout = QVBoxLayout(central_widget)
         
         # Create splitter for graphs and controls
-        splitter = QSplitter(Qt.Vertical)
+        splitter = QSplitter(Qt.Orientation.Vertical)
         main_layout.addWidget(splitter, 1)
         
         # Create graph widget
@@ -222,10 +222,10 @@ class MainWindow(QMainWindow):
         refresh_label = QLabel("Refresh Interval (seconds):")
         fan_layout.addWidget(refresh_label)
         
-        self.refresh_slider = QSlider(Qt.Horizontal)
+        self.refresh_slider = QSlider(Qt.Orientation.Horizontal)
         self.refresh_slider.setRange(1, 30)
         self.refresh_slider.setValue(5)
-        self.refresh_slider.setTickPosition(QSlider.TicksBelow)
+        self.refresh_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.refresh_slider.setTickInterval(5)
         self.refresh_slider.valueChanged.connect(self.update_refresh_interval)
         fan_layout.addWidget(self.refresh_slider)
@@ -254,10 +254,10 @@ class MainWindow(QMainWindow):
         manual_control_label = QLabel("Manual Fan Speed (%):")
         fan_layout.addWidget(manual_control_label)
         
-        self.fan_speed_control_slider = QSlider(Qt.Horizontal)
+        self.fan_speed_control_slider = QSlider(Qt.Orientation.Horizontal)
         self.fan_speed_control_slider.setRange(0, 100)
         self.fan_speed_control_slider.setValue(50)
-        self.fan_speed_control_slider.setTickPosition(QSlider.TicksBelow)
+        self.fan_speed_control_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.fan_speed_control_slider.setTickInterval(10)
         self.fan_speed_control_slider.valueChanged.connect(self.delayed_fan_setting)
         self.fan_speed_control_slider.setEnabled(False)  # Disabled by default (auto mode)
@@ -292,9 +292,9 @@ class MainWindow(QMainWindow):
         
         # Add separators between status items
         self.status_bar.addPermanentWidget(self.temp_label)
-        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.VLine))
+        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.Shape.VLine))
         self.status_bar.addPermanentWidget(self.fan_speed_label)
-        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.VLine))
+        self.status_bar.addPermanentWidget(QFrame(frameShape=QFrame.Shape.VLine))
         self.status_bar.addPermanentWidget(self.current_profile_label)
     
     def update_readings(self):

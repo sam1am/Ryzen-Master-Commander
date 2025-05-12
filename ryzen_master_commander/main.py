@@ -1,7 +1,7 @@
 import sys
 import os
-from PyQt5.QtWidgets import QApplication
-from PyQt5.QtGui import QIcon
+from PyQt6.QtWidgets import QApplication
+from PyQt6.QtGui import QIcon
 from ryzen_master_commander.app.main_window import MainWindow
 
 def main():
@@ -72,7 +72,7 @@ def main():
     main_window.show()
     
     # Start the application
-    sys.exit(app.exec_())
+    sys.exit(app.exec())
 
 if __name__ == "__main__":
     main()

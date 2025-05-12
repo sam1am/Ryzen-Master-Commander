@@ -43,7 +43,7 @@ setup(
     ],
     license_files=('LICENSE',),
     install_requires=[
-        "PyQt5",
+        "PyQt6",
         "pyqtgraph",
         "numpy",
         "Pillow",
