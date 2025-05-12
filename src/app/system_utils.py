@@ -43,17 +43,28 @@ def get_system_readings():
 def apply_tdp_settings(current_profile):
     if current_profile:
         command = ["pkexec", "ryzenadj"]
-        for key, value in current_profile.items():
-            if key in ["fast-limit", "slow-limit"]:
-                command.extend([f"--{key}={value * 1000}"])
-            elif key == "slow-time":
-                command.extend([f"--{key}={value * 1000}"])
-            elif key not in ["name", "max-performance", "power-saving"]:
-                command.extend([f"--{key}={value}"])
+        
+        # Basic settings always included
+        if "fast-limit" in current_profile:
+            command.extend([f"--fast-limit={current_profile['fast-limit'] * 1000}"])
+        if "slow-limit" in current_profile:
+            command.extend([f"--slow-limit={current_profile['slow-limit'] * 1000}"])
+        
+        # Advanced settings only if provided
+        if "slow-time" in current_profile:
+            command.extend([f"--slow-time={current_profile['slow-time'] * 1000}"])
+        
+        # Other advanced parameters
+        for key in ["tctl-temp", "apu-skin-temp"]:
+            if key in current_profile:
+                command.extend([f"--{key}={current_profile[key]}"])
+                
+        # Performance mode flags
         if current_profile.get("power-saving"):
             command.append("--power-saving")
         elif current_profile.get("max-performance"):
             command.append("--max-performance")
+            
         try:
             subprocess.run(command)
             print(f"Applied TDP settings with command: {' '.join(command)}")
