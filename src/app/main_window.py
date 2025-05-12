@@ -21,13 +21,13 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QIcon, QAction
 
-# import sys
-
 from src.app.graphs import CombinedGraph
 from src.app.system_utils import get_system_readings
 from src.app.profile_manager import ProfileManager
 from src.app.fan_profile_editor import FanProfileEditor
 from src.app.nbfc_manager import NBFCManager
+from src.app.settings_dialog import SettingsDialog
+from src.app.gauge_widget import CircularGauge
 from src.version import __version__
 
 
@@ -38,7 +38,9 @@ class MainWindow(QMainWindow):
         # Initialize instance variables
         self.profile_manager = ProfileManager()
         self.fan_speed_adjustment_delay = None
-        self.graph_visible = True
+        
+        # Default refresh interval is 5 seconds
+        self.refresh_interval = 5
 
         NBFCManager.setup_nbfc(self)
 
@@ -50,12 +52,12 @@ class MainWindow(QMainWindow):
 
         # Set auto control by default
         self.radio_auto_control.setChecked(True)
-        # self.set_auto_control()
+        self.update_fan_control_visibility()
 
         # Start reading system values
         self.refresh_timer = QTimer(self)
         self.refresh_timer.timeout.connect(self.update_readings)
-        self.refresh_timer.start(5000)  # Initial refresh every 5 seconds
+        self.refresh_timer.start(self.refresh_interval * 1000)  # Initial refresh every 5 seconds
 
         # Schedule first reading
         QTimer.singleShot(1000, self.update_readings)
@@ -73,20 +75,9 @@ class MainWindow(QMainWindow):
 
     def start_nbfc_service(self):
         """Prompt user to start NBFC service"""
-        # msg = QMessageBox(self)
-        # msg.setIcon(QMessageBox.Warning)
-        # msg.setWindowTitle("NBFC Service Not Running")
-        # msg.setText("The notebook fan control service (NBFC) is not running.")
-        # msg.setInformativeText("Fan control features require NBFC to be running. Would you like to start it now?")
-        # msg.setStandardButtons(QMessageBox.Yes | QMessageBox.No)
-        # msg.setDefaultButton(QMessageBox.Yes)
-
-        # if msg.exec_() == QMessageBox.Yes:
-
         print("Attempting to start NBFC service...")
         try:
             subprocess.run(["pkexec", "nbfc", "start"], check=True)
-            # QMessageBox.information(self, "Success", "NBFC service started successfully.")
         except subprocess.CalledProcessError:
             QMessageBox.critical(
                 self,
@@ -156,8 +147,9 @@ class MainWindow(QMainWindow):
         profile_text = self.current_profile_label.text().replace(
             "Current Profile: ", ""
         )
+        power_text = self.power_label.text().replace("Power: ", "")
 
-        tooltip = f"Ryzen Master Commander\n{temp_text} | {fan_text}\nProfile: {profile_text}"
+        tooltip = f"Ryzen Master Commander\n{temp_text} | {fan_text} | {power_text}\nProfile: {profile_text}"
         self.tray_icon.setToolTip(tooltip)
 
     def tray_icon_activated(self, reason):
@@ -180,6 +172,7 @@ class MainWindow(QMainWindow):
             self.radio_auto_control.setChecked(True)
         else:
             self.radio_manual_control.setChecked(True)
+        self.update_fan_control_visibility()
 
     def quit_application(self):
         """Quit the application"""
@@ -225,43 +218,37 @@ class MainWindow(QMainWindow):
         # Controls container
         controls_container = QWidget()
         controls_layout = QHBoxLayout(controls_container)
+        controls_layout.setContentsMargins(0, 0, 0, 0)
         splitter.addWidget(controls_container)
 
         # Set initial sizes for splitter
         splitter.setSizes([380, 320])
 
-        # Create TDP Controls group box
+        # Create TDP Controls group box (set stretch factor to 1)
         tdp_group = QGroupBox("TDP Controls")
         tdp_layout = QVBoxLayout(tdp_group)
+        
+        # Add power gauge at the top of TDP controls
+        self.power_gauge = CircularGauge(title="Watts")
+        self.power_gauge.set_max_value(30)  # Default, will update with profile
+        tdp_layout.addWidget(self.power_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
+        
+        # Add TDP profile controls
         self.profile_manager.create_widgets(tdp_group)
-        controls_layout.addWidget(tdp_group)
+        controls_layout.addWidget(tdp_group, 1)  # Set stretch factor to 1
 
-        # Create Fan Controls group box
+        # Create Fan Controls group box (set stretch factor to 1)
         fan_group = QGroupBox("Fan Controls")
         fan_layout = QVBoxLayout(fan_group)
+        
+        # Add fan speed gauge at the top
+        self.fan_gauge = CircularGauge(title="Fan %")
+        fan_layout.addWidget(self.fan_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
 
         # Fan profile editor button
         fan_profile_editor_btn = QPushButton("Fan Profile Editor")
         fan_profile_editor_btn.clicked.connect(self.open_fan_profile_editor)
         fan_layout.addWidget(fan_profile_editor_btn)
-
-        # Refresh interval slider
-        refresh_label = QLabel("Refresh Interval (seconds):")
-        fan_layout.addWidget(refresh_label)
-
-        self.refresh_slider = QSlider(Qt.Orientation.Horizontal)
-        self.refresh_slider.setRange(1, 30)
-        self.refresh_slider.setValue(5)
-        self.refresh_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
-        self.refresh_slider.setTickInterval(5)
-        self.refresh_slider.valueChanged.connect(self.update_refresh_interval)
-        fan_layout.addWidget(self.refresh_slider)
-
-        refresh_value_layout = QHBoxLayout()
-        refresh_value_layout.addWidget(QLabel("1"))
-        refresh_value_layout.addStretch()
-        refresh_value_layout.addWidget(QLabel("30"))
-        fan_layout.addLayout(refresh_value_layout)
 
         # Fan control mode
         control_mode_group = QGroupBox("Fan Control Mode")
@@ -277,9 +264,14 @@ class MainWindow(QMainWindow):
 
         fan_layout.addWidget(control_mode_group)
 
+        # Manual fan speed controls - in a separate widget to show/hide
+        self.manual_controls_widget = QWidget()
+        manual_controls_layout = QVBoxLayout(self.manual_controls_widget)
+        manual_controls_layout.setContentsMargins(0, 0, 0, 0)
+        
         # Manual fan speed slider
         manual_control_label = QLabel("Manual Fan Speed (%):")
-        fan_layout.addWidget(manual_control_label)
+        manual_controls_layout.addWidget(manual_control_label)
 
         self.fan_speed_control_slider = QSlider(Qt.Orientation.Horizontal)
         self.fan_speed_control_slider.setRange(0, 100)
@@ -291,10 +283,7 @@ class MainWindow(QMainWindow):
         self.fan_speed_control_slider.valueChanged.connect(
             self.delayed_fan_setting
         )
-        self.fan_speed_control_slider.setEnabled(
-            False
-        )  # Disabled by default (auto mode)
-        fan_layout.addWidget(self.fan_speed_control_slider)
+        manual_controls_layout.addWidget(self.fan_speed_control_slider)
 
         fan_speed_value_layout = QHBoxLayout()
         fan_speed_value_layout.addWidget(QLabel("0%"))
@@ -303,28 +292,33 @@ class MainWindow(QMainWindow):
         fan_speed_value_layout.addWidget(self.manual_control_value_label)
         fan_speed_value_layout.addStretch()
         fan_speed_value_layout.addWidget(QLabel("100%"))
-        fan_layout.addLayout(fan_speed_value_layout)
-
-        # Toggle graph button
-        toggle_graph_btn = QPushButton("Hide Graphs")
-        toggle_graph_btn.clicked.connect(self.toggle_graph)
-        self.toggle_graph_btn = toggle_graph_btn
-        fan_layout.addWidget(toggle_graph_btn)
-
+        manual_controls_layout.addLayout(fan_speed_value_layout)
+        
+        fan_layout.addWidget(self.manual_controls_widget)
+        
         fan_layout.addStretch()
-        controls_layout.addWidget(fan_group)
+        controls_layout.addWidget(fan_group, 1)  # Set stretch factor to 1
 
         # Create status bar
         self.status_bar = QStatusBar()
         self.setStatusBar(self.status_bar)
+        
+        # Settings gear on left side of status bar
+        self.settings_btn = QPushButton("⚙️")
+        self.settings_btn.setToolTip("Settings")
+        self.settings_btn.setFlat(True)
+        self.settings_btn.setMaximumWidth(30)
+        self.settings_btn.clicked.connect(self.open_settings)
+        self.status_bar.addWidget(self.settings_btn)
 
-        # Status bar widgets
+        # Status bar widgets on right side
         self.temp_label = QLabel("Temperature: --°C")
         self.fan_speed_label = QLabel("Fan Speed: --%")
+        self.power_label = QLabel("Power: -- W")
         self.current_profile_label = QLabel("Current Profile: --")
         self.app_version_label = QLabel(f"v{__version__}")
 
-        # Add separators between status items
+        # Add separators between status items (as permanent widgets on right)
         self.status_bar.addPermanentWidget(self.temp_label)
         self.status_bar.addPermanentWidget(
             QFrame(frameShape=QFrame.Shape.VLine)
@@ -333,17 +327,42 @@ class MainWindow(QMainWindow):
         self.status_bar.addPermanentWidget(
             QFrame(frameShape=QFrame.Shape.VLine)
         )
+        self.status_bar.addPermanentWidget(self.power_label)
+        self.status_bar.addPermanentWidget(
+            QFrame(frameShape=QFrame.Shape.VLine)
+        )
         self.status_bar.addPermanentWidget(self.current_profile_label)
 
     def update_readings(self):
-        temperature, fan_speed, current_profile = get_system_readings()
+        temperature, fan_speed, current_profile, power = get_system_readings()
 
         # Update status bar labels
         self.temp_label.setText(f"Temperature: {temperature}°C")
         self.fan_speed_label.setText(f"Fan Speed: {fan_speed}%")
+        self.power_label.setText(f"Power: {power} W")
         self.current_profile_label.setText(
             f"Current Profile: {current_profile}"
         )
+
+        # Update gauges
+        if fan_speed != "n/a":
+            try:
+                self.fan_gauge.set_value(float(fan_speed))
+            except (ValueError, TypeError):
+                print(f"Could not convert fan speed to float: {fan_speed}")
+        
+        if power != "n/a":
+            try:
+                self.power_gauge.set_value(float(power))
+            except (ValueError, TypeError):
+                print(f"Could not convert power to float: {power}")
+            
+        # Update the power gauge max value based on current profile's fast limit
+        if hasattr(self, 'profile_manager') and hasattr(self.profile_manager, 'current_profile'):
+            if self.profile_manager.current_profile and 'fast-limit' in self.profile_manager.current_profile:
+                fast_limit = self.profile_manager.current_profile['fast-limit']
+                # Set gauge max to fast limit + 5W buffer
+                self.power_gauge.set_max_value(fast_limit + 5)
 
         # Update combined graph
         self.combined_graph.update_data(temperature, fan_speed)
@@ -356,12 +375,15 @@ class MainWindow(QMainWindow):
             self.toggle_auto_action.setChecked(
                 self.radio_auto_control.isChecked()
             )
+            
 
-    def update_refresh_interval(self):
-        refresh_seconds = (
-            self.refresh_slider.value() * 1000
-        )  # Convert to milliseconds
-        self.refresh_timer.setInterval(refresh_seconds)
+    def open_settings(self):
+        """Open the settings dialog"""
+        dialog = SettingsDialog(self, self.refresh_interval)
+        if dialog.exec():
+            self.refresh_interval = dialog.get_refresh_interval()
+            self.refresh_timer.setInterval(self.refresh_interval * 1000)
+            print(f"Updated refresh interval to {self.refresh_interval} seconds")
 
     def delayed_fan_setting(self):
         # Cancel previous timer if it exists
@@ -377,6 +399,9 @@ class MainWindow(QMainWindow):
         # Update the displayed value immediately
         slider_value = self.fan_speed_control_slider.value()
         self.manual_control_value_label.setText(f"{slider_value}%")
+        
+        # Update gauge immediately for responsive feel
+        self.fan_gauge.set_value(slider_value)
 
     def apply_fan_speed(self):
         slider_value = self.fan_speed_control_slider.value()
@@ -391,21 +416,18 @@ class MainWindow(QMainWindow):
                 subprocess.run(["pkexec", "nbfc", "set", "-a"])
             except subprocess.CalledProcessError as e:
                 print(f"Error setting automatic fan control: {e}")
-            self.fan_speed_control_slider.setEnabled(False)
+            self.update_fan_control_visibility()
 
     def set_manual_control(self):
         if self.radio_manual_control.isChecked():
-            self.fan_speed_control_slider.setEnabled(True)
+            self.update_fan_control_visibility()
 
-    def toggle_graph(self):
-        if self.graph_visible:
-            self.graph_widget.hide()
-            self.toggle_graph_btn.setText("Show Graphs")
+    def update_fan_control_visibility(self):
+        """Show or hide manual fan controls based on selected mode"""
+        if self.radio_manual_control.isChecked():
+            self.manual_controls_widget.show()
         else:
-            self.graph_widget.show()
-            self.toggle_graph_btn.setText("Hide Graphs")
-
-        self.graph_visible = not self.graph_visible
+            self.manual_controls_widget.hide()
 
     def open_fan_profile_editor(self):
         active_nbfc_profile = None

@@ -4,29 +4,40 @@ import os
 
 
 def get_system_readings():
+    # Get temperature and fan speed from NBFC
     try:
         output = subprocess.check_output(["nbfc", "status", "-a"], text=True)
     except subprocess.CalledProcessError as e:
         print(f"Failed to execute 'nbfc status -a': {e}")
-        return "n/a", "n/a", "n/a"
+        temp, fan_speed, profile = "n/a", "n/a", "n/a"
     except FileNotFoundError:
         print(
             "nbfc command not found. Make sure NoteBook FanControl is installed."
         )
-        return "n/a", "n/a", "n/a"
+        temp, fan_speed, profile = "n/a", "n/a", "n/a"
+    else:
+        temperature_match = re.search(r"Temperature\s+:\s+(\d+\.?\d*)", output)
+        fan_speed_match = re.search(r"Current Fan Speed\s+:\s+(\d+\.?\d*)", output)
+        current_profile_match = re.search(
+            r"Selected Config Name\s+:\s+(.*?)$", output, re.MULTILINE
+        )
 
-    temperature_match = re.search(r"Temperature\s+:\s+(\d+\.?\d*)", output)
-    fan_speed_match = re.search(r"Current Fan Speed\s+:\s+(\d+\.?\d*)", output)
-    current_profile_match = re.search(
-        r"Selected Config Name\s+:\s+(.*?)$", output, re.MULTILINE
-    )
-
-    temperature = temperature_match.group(1) if temperature_match else "n/a"
-    fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
-    current_profile = (
-        current_profile_match.group(1) if current_profile_match else "n/a"
-    )
-    return temperature, fan_speed, current_profile
+        temp = temperature_match.group(1) if temperature_match else "n/a"
+        fan_speed = fan_speed_match.group(1) if fan_speed_match else "n/a"
+        profile = (
+            current_profile_match.group(1) if current_profile_match else "n/a"
+        )
+    
+    # Get power consumption data using sensors
+    try:
+        sensors_output = subprocess.check_output(["sensors"], text=True)
+        power_match = re.search(r"power1:\s+(\d+\.\d+)\s*W", sensors_output)
+        power = power_match.group(1) if power_match else "n/a"
+    except (subprocess.CalledProcessError, FileNotFoundError) as e:
+        print(f"Failed to get power data: {e}")
+        power = "n/a"
+    
+    return temp, fan_speed, profile, power
 
 
 def apply_tdp_settings(current_profile):
