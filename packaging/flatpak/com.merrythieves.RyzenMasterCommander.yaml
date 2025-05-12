@@ -1,0 +1,82 @@
+app-id: com.merrythieves.RyzenMasterCommander
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: ryzen-master-commander
+finish-args:
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  - --device=dri
+  # Hardware access - needed for ryzenadj
+  - --device=all
+  - --filesystem=host
+  # System services
+  - --system-talk-name=org.freedesktop.PolicyKit1
+  - --talk-name=org.freedesktop.Notifications
+
+modules:
+  - name: ryzenadj
+    buildsystem: cmake
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+    sources:
+      - type: git
+        url: https://github.com/FlyGoat/RyzenAdj.git
+        tag: v0.16.0
+    cleanup:
+      - /include
+      - /lib/pkgconfig
+
+  - name: nbfc
+    buildsystem: simple
+    build-commands:
+      - make
+      - install -Dm755 src/nbfc ${FLATPAK_DEST}/bin/nbfc
+      - install -Dm755 src/ec_probe ${FLATPAK_DEST}/bin/ec-probe
+      - install -Dm755 src/nbfc_service ${FLATPAK_DEST}/bin/nbfc_service || echo "nbfc_service not found, skipping"
+    sources:
+      - type: git
+        url: https://github.com/nbfc-linux/nbfc-linux.git
+        tag: 0.3.16
+
+  - name: pciutils
+    buildsystem: simple
+    build-commands:
+      - make PREFIX=/usr SHARED=yes
+      - make PREFIX=/usr SHARED=yes DESTDIR=${FLATPAK_DEST} install install-lib
+    sources:
+      - type: archive
+        url: https://mirrors.edge.kernel.org/pub/software/utils/pciutils/pciutils-3.9.0.tar.gz
+        sha256: 01f5b9ee8eff577e9953a43bafb3ead76e0654a7288dc26d79627074956fb1e0
+    cleanup:
+      - /share/man
+
+  - name: libdrm
+    buildsystem: meson
+    sources:
+      - type: git
+        url: https://gitlab.freedesktop.org/mesa/drm.git
+        tag: libdrm-2.4.114
+
+  - name: ryzen-master-commander
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=${FLATPAK_DEST} .
+      - mkdir -p ${FLATPAK_DEST}/share/applications
+      - mkdir -p ${FLATPAK_DEST}/share/icons/hicolor/128x128/apps
+      - cp share/applications/ryzen-master-commander.desktop ${FLATPAK_DEST}/share/applications/
+      - cp share/icons/hicolor/128x128/apps/ryzen-master-commander.png ${FLATPAK_DEST}/share/icons/hicolor/128x128/apps/
+      - chmod +x ${FLATPAK_DEST}/bin/ryzen-master-commander
+    sources:
+      - type: dir
+        path: ../..
+        skip:
+          - .git
+          - .venv
+          - builds
+    modules:
+      - name: python-deps
+        buildsystem: simple
+        build-commands:
+          - pip3 install --prefix=${FLATPAK_DEST} PyQt6 pyqtgraph numpy Pillow pystray

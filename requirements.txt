@@ -1,3 +1,5 @@
 numpy
 Pillow
 pystray
+pyqt6
+pyqtgraph

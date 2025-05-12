@@ -7,7 +7,7 @@ PACKAGE_NAME := ryzen-master-commander
 RPM_BUILD_DIR := $(HOME)/rpmbuild
 
 # Default target
-all: arch deb rpm
+all: arch deb rpm flatpak
 
 # Create build directory
 $(BUILD_DIR):
@@ -224,6 +224,19 @@ rpm: $(BUILD_DIR)
 install-rpm: rpm
 	@echo "Installing RPM package..."
 	sudo rpm -Uvh --force $(BUILD_DIR)/$(PACKAGE_NAME)-$(VERSION)-*.rpm
+
+# ====== FLATPAK PACKAGE ======
+flatpak: $(BUILD_DIR)
+	@echo "Building Flatpak package (version $(VERSION))..."
+	flatpak-builder --user --force-clean --repo=flatpak-repo \
+		builds/flatpak-build packaging/flatpak/com.merrythieves.RyzenMasterCommander.yaml
+	flatpak build-bundle flatpak-repo $(BUILD_DIR)/ryzen-master-commander-$(VERSION).flatpak \
+		com.merrythieves.RyzenMasterCommander
+
+install-flatpak: flatpak
+	@echo "Installing Flatpak package..."
+	flatpak-builder --user --install --force-clean \
+		builds/flatpak-build packaging/flatpak/com.merrythieves.RyzenMasterCommander.yaml
 
 # Bump the version
 bump-version:
