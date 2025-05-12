@@ -15,12 +15,24 @@ class ProfileManager:
             os.path.expanduser("~/.local/share/ryzen-master-commander/tdp_profiles")  # User installation
         ]
         
-        # Use the first directory that exists
-        self.profiles_directory = next((d for d in potential_dirs if os.path.exists(d)), "./tdp_profiles")
+        # Use the first directory that exists AND contains profiles
+        self.profiles_directory = None
+        for dir_path in potential_dirs:
+            if os.path.exists(dir_path):
+                # Check if directory contains any json files
+                if any(f.endswith('.json') for f in os.listdir(dir_path)):
+                    self.profiles_directory = dir_path
+                    break
+        
+        # Fallback to default if no valid directory found
+        if not self.profiles_directory:
+            self.profiles_directory = "./tdp_profiles"
+            
         print(f"Using profiles from: {self.profiles_directory}")
         
         self.current_profile = None
         self.cached_profiles = self.load_profiles()
+
         
     def create_widgets(self, parent):
         self.parent = parent
