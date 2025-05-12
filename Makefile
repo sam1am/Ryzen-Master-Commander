@@ -185,7 +185,8 @@ rpm: $(BUILD_DIR)
 	echo "/usr/share/icons/hicolor/*/apps/ryzen-master-commander.png" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
 	echo "/usr/share/ryzen-master-commander/" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
 	echo "/usr/share/polkit-1/actions/com.merrythieves.ryzenadj.policy" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
-	echo "%{python_sitelib}/*" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
+	echo "/usr/lib/python*/site-packages/src/" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
+	echo "/usr/lib/python*/site-packages/ryzen_master_commander*.egg-info/" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
 	echo "" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
 	echo "%post" >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
 	echo 'if [ -x /usr/bin/update-desktop-database ]; then' >> $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
@@ -202,10 +203,22 @@ rpm: $(BUILD_DIR)
 	# Build the RPM
 	rpmbuild -ba $(RPM_BUILD_DIR)/SPECS/$(PACKAGE_NAME).spec
 	
-	# Copy the RPM to the build directory
-	mkdir -p $(BUILD_DIR)
-	cp $(shell find $(RPM_BUILD_DIR)/RPMS/ -name "$(PACKAGE_NAME)-$(VERSION)*.rpm") $(BUILD_DIR)/
-	
+	@echo "Copying RPM package to build directory..."
+	@mkdir -p $(BUILD_DIR)
+	@bash -c 'RPM_PATH="/home/sam/rpmbuild/RPMS/noarch/$(PACKAGE_NAME)-$(VERSION)-1.noarch.rpm"; \
+		echo "Looking for: $$RPM_PATH"; \
+		if [ -f "$$RPM_PATH" ]; then \
+			echo "Found RPM at: $$RPM_PATH"; \
+			cp "$$RPM_PATH" $(BUILD_DIR)/; \
+			echo "RPM package copied to $(BUILD_DIR)"; \
+		else \
+			echo "ERROR: RPM file not found at: $$RPM_PATH"; \
+			ls -la /home/sam/rpmbuild/RPMS/noarch/; \
+			echo "Trying direct copy..."; \
+			cp /home/sam/rpmbuild/RPMS/noarch/$(PACKAGE_NAME)-$(VERSION)-1.noarch.rpm $(BUILD_DIR)/ || echo "Direct copy failed too"; \
+		fi'
+
+
 	@echo "RPM package created in $(BUILD_DIR)"
 
 install-rpm: rpm
