@@ -62,6 +62,9 @@ Bottom right: There is a fan profile editor for creating fan curves. The rrfresh
 
 At the bottom you will see the current temperature, fan speed, and current fan curve profile. 
 
+![Graph Only View](img/graph.png)
+*Drag to view graph only.*
+
 ## Contributing 🤝
 
 Contributions to Ryzen Master Commander are welcome! If you find a bug, have a feature request, or want to contribute code, please open an issue or submit a pull request on the [GitHub repository](https://github.com/sam1am/Ryzen-Master-Commander). 😊

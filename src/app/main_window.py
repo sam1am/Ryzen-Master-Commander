@@ -154,7 +154,7 @@ class MainWindow(QMainWindow):
 
     def tray_icon_activated(self, reason):
         """Handle tray icon activation"""
-        if reason == QSystemTrayIcon.Trigger:  # Left click
+        if reason == QSystemTrayIcon.ActivationReason.Trigger:  # Left click
             if self.isVisible():
                 self.hide()
             else:
