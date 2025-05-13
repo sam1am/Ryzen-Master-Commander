@@ -228,6 +228,57 @@ install-rpm: rpm
 # ====== FLATPAK PACKAGE ======
 flatpak: $(BUILD_DIR)
 	@echo "Building Flatpak package (version $(VERSION))..."
+	@echo "FORCE CLEANING and preparing pip cache for Flatpak..."
+	rm -rf flatpak-pip-cache # Ensure it's clean
+	mkdir -p flatpak-pip-cache
+
+	# --- Dependencies for Python 3.12 (Flatpak SDK) ---
+	echo "Downloading numpy for Flatpak SDK (Python 3.12)..."
+	pip download --no-deps -d flatpak-pip-cache \
+		--only-binary=:all: \
+		--platform manylinux2014_x86_64 \
+		--python-version 3.12 --implementation cp --abi cp312 \
+		numpy
+
+	echo "Downloading Pillow for Flatpak SDK (Python 3.12)..."
+	pip download --no-deps -d flatpak-pip-cache \
+		--only-binary=:all: \
+		--platform manylinux_2_28_x86_64 \
+		--python-version 3.12 --implementation cp --abi cp312 \
+		Pillow
+
+	# --- PyQt6 Components - Multi-step Download for Python 3.12 ---
+	echo "Downloading PyQt6-sip==13.6.0 for Python 3.12..."
+	pip download --no-deps -d flatpak-pip-cache \
+		--only-binary=:all: \
+		--platform manylinux_2_5_x86_64 \
+		--python-version 3.12 --implementation cp --abi cp312 \
+		"PyQt6-sip==13.6.0" # PyQt6 6.7.0 often uses sip 13.6.0
+
+	echo "Downloading PyQt6_Qt6==6.7.0 for Python 3.12 (any compatible platform)..."
+	pip download --no-deps -d flatpak-pip-cache \
+		--only-binary=:all: \
+		--python-version 3.12 --implementation cp --abi cp312 \
+		"PyQt6-Qt6==6.7.0" # Get the Qt6 libs for 6.7.0, platform any for this one
+
+	echo "Downloading PyQt6==6.7.0 (main package) for Python 3.12..."
+	pip download --no-deps -d flatpak-pip-cache \
+		--only-binary=:all: \
+		--platform manylinux_2_28_x86_64 \
+		--python-version 3.12 --implementation cp --abi cp312 \
+		"PyQt6==6.7.0"
+	# --- End PyQt6 Components ---
+
+	echo "Downloading pyqtgraph, pystray, and other general dependencies..."
+	pip download -d flatpak-pip-cache \
+		pyqtgraph pystray # These will also pick up their own deps like six, python-xlib
+
+	echo "Contents of flatpak-pip-cache after download:"
+	ls -1 flatpak-pip-cache
+	# --- End Dependencies Download ---
+
+	flatpak remote-add --if-not-exists --user flathub https://flathub.org/repo/flathub.flatpakrepo
+	flatpak install --user -y flathub org.kde.Platform//6.9 org.kde.Sdk//6.9 || true
 	flatpak-builder --user --force-clean --repo=flatpak-repo \
 		builds/flatpak-build packaging/flatpak/com.merrythieves.RyzenMasterCommander.yaml
 	flatpak build-bundle flatpak-repo $(BUILD_DIR)/ryzen-master-commander-$(VERSION).flatpak \

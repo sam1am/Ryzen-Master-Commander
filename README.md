@@ -71,7 +71,7 @@ Contributions to Ryzen Master Commander are welcome! If you find a bug, have a f
 
 ## License 📜
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the [APACHE-2.0](LICENSE).
 
 ## Acknowledgements 🙏
 

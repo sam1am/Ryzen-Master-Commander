@@ -1,17 +1,16 @@
 app-id: com.merrythieves.RyzenMasterCommander
-runtime: org.freedesktop.Platform
-runtime-version: '23.08'
-sdk: org.freedesktop.Sdk
+runtime: org.kde.Platform
+runtime-version: '6.9'
+sdk: org.kde.Sdk
 command: ryzen-master-commander
 finish-args:
   - --share=ipc
   - --socket=x11
   - --socket=wayland
+  # - --socket=network  # Explicitly enable network access
   - --device=dri
-  # Hardware access - needed for ryzenadj
   - --device=all
   - --filesystem=host
-  # System services
   - --system-talk-name=org.freedesktop.PolicyKit1
   - --talk-name=org.freedesktop.Notifications
 
@@ -59,6 +58,32 @@ modules:
         url: https://gitlab.freedesktop.org/mesa/drm.git
         tag: libdrm-2.4.114
 
+  # All Python dependencies in one step
+  # In the python-packages module:
+  - name: python-packages
+    buildsystem: simple
+    build-commands:
+      - echo "--- Flatpak Build Environment Info (python-packages module) ---"
+      - echo "SDK Python version:"
+      - python3 --version
+      - echo "SDK pip version:"
+      - pip3 --version
+      - echo "Contents of build directory (${FLATPAK_BUILDER_BUILDDIR}) where pip looks for wheels:"
+      - ls -la ${FLATPAK_BUILDER_BUILDDIR}
+      - echo "--- End Info ---"
+      # The requirements.txt file should be at the root of ${FLATPAK_BUILDER_BUILDDIR}
+      # due to the 'sources:' entry below.
+      - pip3 install --no-index --find-links=file://${FLATPAK_BUILDER_BUILDDIR} --prefix=${FLATPAK_DEST} -r requirements.txt
+    sources:
+      # Source 1: The Python wheels from your pre-filled cache.
+      # The *contents* of flatpak-pip-cache will be copied to ${FLATPAK_BUILDER_BUILDDIR}.
+      - type: dir
+        path: ../../flatpak-pip-cache
+      # Source 2: The requirements.txt file from your project root.
+      # This will copy 'requirements.txt' into ${FLATPAK_BUILDER_BUILDDIR}.
+      - type: file
+        path: ../../requirements.txt
+
   - name: ryzen-master-commander
     buildsystem: simple
     build-commands:
@@ -75,8 +100,3 @@ modules:
           - .git
           - .venv
           - builds
-    modules:
-      - name: python-deps
-        buildsystem: simple
-        build-commands:
-          - pip3 install --prefix=${FLATPAK_DEST} PyQt6 pyqtgraph numpy Pillow pystray

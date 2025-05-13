@@ -181,7 +181,7 @@ class NBFCManager:
         )
         config_dialog = ConfigSelectionDialog(parent)
         if (
-            config_dialog.exec_() == QDialog.Accepted
+            config_dialog.exec() == QDialog.DialogCode.Accepted
             and config_dialog.selected_config
         ):
             if NBFCManager.set_nbfc_config(config_dialog.selected_config):
