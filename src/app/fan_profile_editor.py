@@ -155,6 +155,13 @@ class FanProfileEditor(QMainWindow):
         if obj is self.plot_widget.viewport():
             event_type = event.type()
 
+            # Handle double click separately
+            if event_type == QEvent.Type.MouseButtonDblClick and event.button() == Qt.MouseButton.LeftButton:
+                scene_pos = self.plot_widget.mapToScene(event.pos())
+                data_pos = self.view_box.mapSceneToView(scene_pos)
+                self._add_point_at(data_pos.x(), data_pos.y())
+                return True
+
             # Mouse press - start drag operation
             if (
                 event_type == QEvent.Type.MouseButtonPress
