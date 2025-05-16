@@ -17,6 +17,9 @@ $(BUILD_DIR):
 clean:
 	rm -rf $(BUILD_DIR) dist build *.egg-info
 	rm -rf $(RPM_BUILD_DIR)
+	rm -rf flatpak-repo
+	rm -rf flatpak-pip-cache
+	rm -rf .flatpak-builder
 
 # Development environment
 dev-setup:
