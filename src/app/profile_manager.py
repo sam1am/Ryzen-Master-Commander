@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
 )
-from PyQt6.QtCore import pyqtSlot, Qt, QProcess
+from PyQt6.QtCore import pyqtSlot, Qt, QProcess, QSettings
 
 from src.app.system_utils import apply_tdp_settings
 
@@ -46,6 +46,9 @@ class ProfileManager:
 
         self.current_profile = None
         self.cached_profiles = self.load_profiles()
+
+        # Initialize settings for persisting TDP values
+        self.settings = QSettings("MerryThieves", "RyzenMasterCommander")
 
     def create_widgets(self, parent):
         self.parent = parent
@@ -209,6 +212,10 @@ class ProfileManager:
         # Populate profile dropdown
         self.update_profile_dropdown()
 
+        # Restore saved TDP settings after widgets are created
+        from PyQt6.QtCore import QTimer
+        QTimer.singleShot(500, self.restore_tdp_settings)
+
     def toggle_advanced_section(self):
         """Toggle visibility of advanced settings section"""
         if self.advanced_content.isVisible():
@@ -239,8 +246,47 @@ class ProfileManager:
                 }
                 apply_tdp_settings(basic_profile, parent=self.parent)
                 print("Auto-applied basic TDP settings")
+
+                # Save settings for auto-restore on next startup
+                self.save_tdp_settings(basic_profile)
             except (ValueError, TypeError) as e:
                 print(f"Error auto-applying settings: {e}")
+
+    def save_tdp_settings(self, profile):
+        """Save TDP settings to persistent storage"""
+        try:
+            self.settings.setValue("tdp/fast_limit", profile.get("fast-limit"))
+            self.settings.setValue("tdp/slow_limit", profile.get("slow-limit"))
+            self.settings.sync()
+            print(f"Saved TDP settings: Fast={profile.get('fast-limit')}W, Slow={profile.get('slow-limit')}W")
+        except Exception as e:
+            print(f"Error saving TDP settings: {e}")
+
+    def restore_tdp_settings(self):
+        """Restore and apply saved TDP settings on startup"""
+        try:
+            fast_limit = self.settings.value("tdp/fast_limit", type=int)
+            slow_limit = self.settings.value("tdp/slow_limit", type=int)
+
+            if fast_limit and slow_limit:
+                # Update UI fields
+                self.fast_limit_entry.setText(str(fast_limit))
+                self.slow_limit_entry.setText(str(slow_limit))
+
+                # Apply the settings
+                basic_profile = {
+                    "fast-limit": fast_limit,
+                    "slow-limit": slow_limit,
+                }
+                apply_tdp_settings(basic_profile, parent=self.parent)
+                print(f"Restored and applied TDP settings: Fast={fast_limit}W, Slow={slow_limit}W")
+                return True
+            else:
+                print("No saved TDP settings found")
+                return False
+        except Exception as e:
+            print(f"Error restoring TDP settings: {e}")
+            return False
 
     def apply_current_settings(self, include_advanced=False):
         """Apply current TDP settings"""
@@ -263,6 +309,9 @@ class ProfileManager:
 
             # Apply the settings
             apply_tdp_settings(profile, parent=self.parent)
+
+            # Save basic settings (fast/slow limits) for auto-restore
+            self.save_tdp_settings(profile)
         except (ValueError, TypeError) as e:
             print(f"Error applying settings: {e}")
 
@@ -347,6 +396,9 @@ class ProfileManager:
 
         # Apply the profile
         apply_tdp_settings(self.current_profile, parent=self.parent)
+
+        # Save basic settings for auto-restore
+        self.save_tdp_settings(self.current_profile)
 
     def save_profile(self):
         profile_name, ok = QInputDialog.getText(

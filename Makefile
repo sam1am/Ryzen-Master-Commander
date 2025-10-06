@@ -7,6 +7,7 @@ PACKAGE_NAME := ryzen-master-commander
 RPM_BUILD_DIR := $(HOME)/rpmbuild
 
 # Default target
+.NOTPARALLEL: all
 all: arch deb rpm flatpak
 
 # Create build directory
