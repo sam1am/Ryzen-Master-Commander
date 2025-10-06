@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QProcess
 from PyQt6.QtGui import QIcon, QAction
 
 from src.app.graphs import CombinedGraph
@@ -405,17 +405,41 @@ class MainWindow(QMainWindow):
 
     def apply_fan_speed(self):
         slider_value = self.fan_speed_control_slider.value()
-        try:
-            subprocess.run(["pkexec", "nbfc", "set", "-s", str(slider_value)])
-        except subprocess.CalledProcessError as e:
-            print(f"Error setting fan speed: {e}")
+
+        # Create QProcess for non-blocking execution
+        process = QProcess()
+
+        def on_finished(exit_code, exit_status):
+            if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                print(f"Fan speed set to {slider_value}%")
+            else:
+                stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+                error_msg = f"Error setting fan speed (exit code: {exit_code})"
+                if stderr:
+                    error_msg += f": {stderr}"
+                print(error_msg)
+
+        process.finished.connect(on_finished)
+        process.start("pkexec", ["nbfc", "set", "-s", str(slider_value)])
 
     def set_auto_control(self):
         if self.radio_auto_control.isChecked():
-            try:
-                subprocess.run(["pkexec", "nbfc", "set", "-a"])
-            except subprocess.CalledProcessError as e:
-                print(f"Error setting automatic fan control: {e}")
+            # Create QProcess for non-blocking execution
+            process = QProcess()
+
+            def on_finished(exit_code, exit_status):
+                if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                    print("Auto fan control enabled")
+                else:
+                    stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+                    error_msg = f"Error setting automatic fan control (exit code: {exit_code})"
+                    if stderr:
+                        error_msg += f": {stderr}"
+                    print(error_msg)
+
+            process.finished.connect(on_finished)
+            process.start("pkexec", ["nbfc", "set", "-a"])
+
             self.update_fan_control_visibility()
 
     def set_manual_control(self):

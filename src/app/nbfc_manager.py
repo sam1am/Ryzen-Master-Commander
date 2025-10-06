@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLabel,
 )
+from PyQt6.QtCore import QProcess
 
 
 class NBFCManager:
@@ -53,15 +54,24 @@ class NBFCManager:
             return False
 
     @staticmethod
-    def update_nbfc_configs(parent=None):
-        """Download available NBFC configs silently"""
-        try:
-            subprocess.run(
-                ["pkexec", "nbfc", "update"], capture_output=True, text=True
-            )
-            return True
-        except Exception:
-            return False
+    def update_nbfc_configs(parent=None, callback=None):
+        """Download available NBFC configs silently using QProcess.
+
+        Args:
+            parent: Parent widget
+            callback: Optional callback function(success) to call when complete
+        """
+        process = QProcess()
+
+        def on_finished(exit_code, exit_status):
+            success = exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit
+            if callback:
+                callback(success)
+
+        process.finished.connect(on_finished)
+        process.start("pkexec", ["nbfc", "update"])
+
+        return None
 
     @staticmethod
     def get_recommended_config():
@@ -116,30 +126,47 @@ class NBFCManager:
         return sorted(configs)
 
     @staticmethod
-    def set_nbfc_config(config_name, parent=None):
-        """Set NBFC to use the specified config"""
-        try:
-            result = subprocess.run(
-                ["pkexec", "nbfc", "config", "-s", config_name],
-                capture_output=True,
-                text=True,
-            )
-            if "ERROR" in result.stderr:
-                return False
-            return True
-        except Exception:
-            return False
+    def set_nbfc_config(config_name, parent=None, callback=None):
+        """Set NBFC to use the specified config using QProcess.
+
+        Args:
+            config_name: Name of the config to set
+            parent: Parent widget
+            callback: Optional callback function(success) to call when complete
+        """
+        process = QProcess()
+
+        def on_finished(exit_code, exit_status):
+            stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+            success = exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit and "ERROR" not in stderr
+            if callback:
+                callback(success)
+
+        process.finished.connect(on_finished)
+        process.start("pkexec", ["nbfc", "config", "-s", config_name])
+
+        return None
 
     @staticmethod
-    def start_nbfc_service(parent=None):
-        """Start the NBFC service"""
-        try:
-            subprocess.run(
-                ["pkexec", "nbfc", "start"], capture_output=True, text=True
-            )
-            return NBFCManager.is_nbfc_running()
-        except Exception:
-            return False
+    def start_nbfc_service(parent=None, callback=None):
+        """Start the NBFC service using QProcess.
+
+        Args:
+            parent: Parent widget
+            callback: Optional callback function(success) to call when complete
+        """
+        process = QProcess()
+
+        def on_finished(exit_code, exit_status):
+            # Check if service is actually running after the command
+            success = NBFCManager.is_nbfc_running()
+            if callback:
+                callback(success)
+
+        process.finished.connect(on_finished)
+        process.start("pkexec", ["nbfc", "start"])
+
+        return None
 
     @staticmethod
     def setup_nbfc(parent=None):

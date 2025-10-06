@@ -13,7 +13,7 @@ from PyQt6.QtWidgets import (
     QWidget,
     QVBoxLayout,
 )
-from PyQt6.QtCore import pyqtSlot, Qt
+from PyQt6.QtCore import pyqtSlot, Qt, QProcess
 
 from src.app.system_utils import apply_tdp_settings
 
@@ -404,31 +404,39 @@ class ProfileManager:
         except PermissionError:
             # If permission denied, use pkexec
             print(f"Permission denied, trying with elevated privileges...")
-            
+
             # Create a temporary file in /tmp (which should be writable)
             import tempfile
             with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as temp_file:
                 temp_path = temp_file.name
                 json.dump(profile, temp_file, indent=2)
-            
-            try:
-                # Use cp with pkexec to copy to the target location
-                result = subprocess.run(
-                    ["pkexec", "cp", temp_path, profile_path],
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                # Set appropriate permissions
-                subprocess.run(
-                    ["pkexec", "chmod", "644", profile_path],
-                    check=True
-                )
-                print(f"Successfully saved profile with elevated privileges")
-                
-                # Clean up temp file
-                os.unlink(temp_path)
-            except subprocess.CalledProcessError as e:
-                # Clean up temp file on error too
-                os.unlink(temp_path)
-                raise Exception(f"Failed to save with elevated privileges: {e.stderr}")
+
+            # Create QProcess for non-blocking execution
+            process = QProcess()
+
+            def on_cp_finished(exit_code, exit_status):
+                if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                    # Now set permissions
+                    chmod_process = QProcess()
+
+                    def on_chmod_finished(chmod_exit_code, chmod_exit_status):
+                        if chmod_exit_code == 0 and chmod_exit_status == QProcess.ExitStatus.NormalExit:
+                            print(f"Successfully saved profile with elevated privileges")
+                            # Clean up temp file
+                            os.unlink(temp_path)
+                        else:
+                            print(f"Failed to set permissions on {profile_path}")
+                            os.unlink(temp_path)
+
+                    chmod_process.finished.connect(on_chmod_finished)
+                    chmod_process.start("pkexec", ["chmod", "644", profile_path])
+                else:
+                    stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+                    error_msg = f"Failed to save with elevated privileges: {stderr}"
+                    print(error_msg)
+                    # Clean up temp file on error
+                    os.unlink(temp_path)
+                    raise Exception(error_msg)
+
+            process.finished.connect(on_cp_finished)
+            process.start("pkexec", ["cp", temp_path, profile_path])

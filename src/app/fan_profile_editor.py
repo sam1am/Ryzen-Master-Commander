@@ -14,7 +14,7 @@ from PyQt6.QtWidgets import (
     QLineEdit,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt, QPointF, QEvent
+from PyQt6.QtCore import Qt, QPointF, QEvent, QProcess
 
 # from PyQt6.QtGui import QCursor
 
@@ -492,27 +492,27 @@ class FanProfileEditor(QMainWindow):
         if not profile_name:
             QMessageBox.warning(self, "Warning", "Please select a profile.")
             return
-        try:
-            subprocess.run(
-                ["pkexec", "nbfc", "config", "-a", profile_name],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            QMessageBox.information(
-                self, "Success", f"Applied fan profile '{profile_name}'."
-            )
-        except subprocess.CalledProcessError as e:
-            error_details = f"Error: {e.stderr or e.stdout or str(e)}"
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to apply profile '{profile_name}'.\n{error_details}",
-            )
-        except FileNotFoundError:
-            QMessageBox.critical(
-                self, "Error", "pkexec or nbfc command not found."
-            )
+
+        # Create QProcess for non-blocking execution
+        process = QProcess()
+
+        def on_finished(exit_code, exit_status):
+            if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                QMessageBox.information(
+                    self, "Success", f"Applied fan profile '{profile_name}'."
+                )
+            else:
+                stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+                stdout = process.readAllStandardOutput().data().decode('utf-8', errors='ignore')
+                error_details = f"Error: {stderr or stdout or 'Unknown error'}"
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Failed to apply profile '{profile_name}'.\n{error_details}",
+                )
+
+        process.finished.connect(on_finished)
+        process.start("pkexec", ["nbfc", "config", "-a", profile_name])
 
     def save_custom_profile(self):
         """Saves the current fan curve as a new NBFC profile .json file."""
@@ -596,23 +596,29 @@ class FanProfileEditor(QMainWindow):
             with open(temp_file, "w") as f:
                 json.dump(config, f, indent=2)
             target_file = os.path.join(self.nbfc_configs_dir, f"{name}.json")
-            subprocess.run(
-                ["pkexec", "cp", temp_file, target_file],
-                check=True,
-                capture_output=True,
-                text=True,
-            )
-            QMessageBox.information(
-                self, "Success", f"Saved profile to {target_file}"
-            )
-            self.refresh_ui_after_save(name)
-        except subprocess.CalledProcessError as e:
-            error_details = f"Error: {e.stderr or e.stdout or str(e)}"
-            QMessageBox.critical(
-                self,
-                "Error",
-                f"Failed to save profile with pkexec.\n{error_details}",
-            )
+
+            # Create QProcess for non-blocking execution
+            process = QProcess()
+
+            def on_finished(exit_code, exit_status):
+                if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
+                    QMessageBox.information(
+                        self, "Success", f"Saved profile to {target_file}"
+                    )
+                    self.refresh_ui_after_save(name)
+                else:
+                    stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
+                    stdout = process.readAllStandardOutput().data().decode('utf-8', errors='ignore')
+                    error_details = f"Error: {stderr or stdout or 'Unknown error'}"
+                    QMessageBox.critical(
+                        self,
+                        "Error",
+                        f"Failed to save profile with pkexec.\n{error_details}",
+                    )
+
+            process.finished.connect(on_finished)
+            process.start("pkexec", ["cp", temp_file, target_file])
+
         except Exception as e:
             QMessageBox.critical(
                 self, "Error", f"Failed to save profile: {str(e)}"
