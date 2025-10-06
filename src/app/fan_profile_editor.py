@@ -493,8 +493,8 @@ class FanProfileEditor(QMainWindow):
             QMessageBox.warning(self, "Warning", "Please select a profile.")
             return
 
-        # Create QProcess for non-blocking execution
-        process = QProcess()
+        # Create QProcess for non-blocking execution with parent to prevent GC
+        process = QProcess(self)
 
         def on_finished(exit_code, exit_status):
             if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
@@ -510,6 +510,8 @@ class FanProfileEditor(QMainWindow):
                     "Error",
                     f"Failed to apply profile '{profile_name}'.\n{error_details}",
                 )
+            # Clean up process after finished
+            process.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "config", "-a", profile_name])
@@ -597,8 +599,8 @@ class FanProfileEditor(QMainWindow):
                 json.dump(config, f, indent=2)
             target_file = os.path.join(self.nbfc_configs_dir, f"{name}.json")
 
-            # Create QProcess for non-blocking execution
-            process = QProcess()
+            # Create QProcess for non-blocking execution with parent to prevent GC
+            process = QProcess(self)
 
             def on_finished(exit_code, exit_status):
                 if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
@@ -615,6 +617,8 @@ class FanProfileEditor(QMainWindow):
                         "Error",
                         f"Failed to save profile with pkexec.\n{error_details}",
                     )
+                # Clean up process after finished
+                process.deleteLater()
 
             process.finished.connect(on_finished)
             process.start("pkexec", ["cp", temp_file, target_file])

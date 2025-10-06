@@ -237,7 +237,7 @@ class ProfileManager:
                     "fast-limit": int(self.fast_limit_entry.text()),
                     "slow-limit": int(self.slow_limit_entry.text()),
                 }
-                apply_tdp_settings(basic_profile)
+                apply_tdp_settings(basic_profile, parent=self.parent)
                 print("Auto-applied basic TDP settings")
             except (ValueError, TypeError) as e:
                 print(f"Error auto-applying settings: {e}")
@@ -250,7 +250,7 @@ class ProfileManager:
                 "fast-limit": int(self.fast_limit_entry.text()),
                 "slow-limit": int(self.slow_limit_entry.text()),
             }
-            
+
             # If advanced settings should be included
             if include_advanced:
                 profile.update({
@@ -260,9 +260,9 @@ class ProfileManager:
                     "max-performance": self.max_performance_var.isChecked(),
                     "power-saving": self.power_saving_var.isChecked(),
                 })
-            
+
             # Apply the settings
-            apply_tdp_settings(profile)
+            apply_tdp_settings(profile, parent=self.parent)
         except (ValueError, TypeError) as e:
             print(f"Error applying settings: {e}")
 
@@ -346,7 +346,7 @@ class ProfileManager:
         self.power_saving_var.setChecked(self.current_profile["power-saving"])
 
         # Apply the profile
-        apply_tdp_settings(self.current_profile)
+        apply_tdp_settings(self.current_profile, parent=self.parent)
 
     def save_profile(self):
         profile_name, ok = QInputDialog.getText(
@@ -411,13 +411,13 @@ class ProfileManager:
                 temp_path = temp_file.name
                 json.dump(profile, temp_file, indent=2)
 
-            # Create QProcess for non-blocking execution
-            process = QProcess()
+            # Create QProcess for non-blocking execution with parent to prevent GC
+            process = QProcess(self.parent)
 
             def on_cp_finished(exit_code, exit_status):
                 if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
                     # Now set permissions
-                    chmod_process = QProcess()
+                    chmod_process = QProcess(self.parent)
 
                     def on_chmod_finished(chmod_exit_code, chmod_exit_status):
                         if chmod_exit_code == 0 and chmod_exit_status == QProcess.ExitStatus.NormalExit:
@@ -427,6 +427,8 @@ class ProfileManager:
                         else:
                             print(f"Failed to set permissions on {profile_path}")
                             os.unlink(temp_path)
+                        # Clean up processes
+                        chmod_process.deleteLater()
 
                     chmod_process.finished.connect(on_chmod_finished)
                     chmod_process.start("pkexec", ["chmod", "644", profile_path])
@@ -437,6 +439,8 @@ class ProfileManager:
                     # Clean up temp file on error
                     os.unlink(temp_path)
                     raise Exception(error_msg)
+                # Clean up process after cp finishes
+                process.deleteLater()
 
             process.finished.connect(on_cp_finished)
             process.start("pkexec", ["cp", temp_path, profile_path])

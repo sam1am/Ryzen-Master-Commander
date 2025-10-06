@@ -61,12 +61,13 @@ class NBFCManager:
             parent: Parent widget
             callback: Optional callback function(success) to call when complete
         """
-        process = QProcess()
+        process = QProcess(parent)
 
         def on_finished(exit_code, exit_status):
             success = exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit
             if callback:
                 callback(success)
+            process.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "update"])
@@ -134,13 +135,14 @@ class NBFCManager:
             parent: Parent widget
             callback: Optional callback function(success) to call when complete
         """
-        process = QProcess()
+        process = QProcess(parent)
 
         def on_finished(exit_code, exit_status):
             stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
             success = exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit and "ERROR" not in stderr
             if callback:
                 callback(success)
+            process.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "config", "-s", config_name])
@@ -155,13 +157,14 @@ class NBFCManager:
             parent: Parent widget
             callback: Optional callback function(success) to call when complete
         """
-        process = QProcess()
+        process = QProcess(parent)
 
         def on_finished(exit_code, exit_status):
             # Check if service is actually running after the command
             success = NBFCManager.is_nbfc_running()
             if callback:
                 callback(success)
+            process.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "start"])

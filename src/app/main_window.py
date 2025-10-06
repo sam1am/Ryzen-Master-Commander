@@ -38,7 +38,10 @@ class MainWindow(QMainWindow):
         # Initialize instance variables
         self.profile_manager = ProfileManager()
         self.fan_speed_adjustment_delay = None
-        
+
+        # Store QProcess references to prevent garbage collection
+        self.active_processes = []
+
         # Default refresh interval is 5 seconds
         self.refresh_interval = 5
 
@@ -407,7 +410,7 @@ class MainWindow(QMainWindow):
         slider_value = self.fan_speed_control_slider.value()
 
         # Create QProcess for non-blocking execution
-        process = QProcess()
+        process = QProcess(self)
 
         def on_finished(exit_code, exit_status):
             if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
@@ -418,14 +421,18 @@ class MainWindow(QMainWindow):
                 if stderr:
                     error_msg += f": {stderr}"
                 print(error_msg)
+            # Remove from active processes list
+            if process in self.active_processes:
+                self.active_processes.remove(process)
 
         process.finished.connect(on_finished)
+        self.active_processes.append(process)
         process.start("pkexec", ["nbfc", "set", "-s", str(slider_value)])
 
     def set_auto_control(self):
         if self.radio_auto_control.isChecked():
             # Create QProcess for non-blocking execution
-            process = QProcess()
+            process = QProcess(self)
 
             def on_finished(exit_code, exit_status):
                 if exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit:
@@ -436,8 +443,12 @@ class MainWindow(QMainWindow):
                     if stderr:
                         error_msg += f": {stderr}"
                     print(error_msg)
+                # Remove from active processes list
+                if process in self.active_processes:
+                    self.active_processes.remove(process)
 
             process.finished.connect(on_finished)
+            self.active_processes.append(process)
             process.start("pkexec", ["nbfc", "set", "-a"])
 
             self.update_fan_control_visibility()
