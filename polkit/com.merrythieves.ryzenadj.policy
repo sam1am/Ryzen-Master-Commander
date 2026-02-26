@@ -11,11 +11,11 @@
     <message>Authentication is required to change processor settings</message>
     <icon_name>cpu</icon_name>
     <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
       <allow_active>yes</allow_active>
     </defaults>
-    <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/ryzenadj</annotate>
+    <annotate key="org.freedesktop.policykit.exec.path">/snap/bin/ryzenadj</annotate>
     <annotate key="org.freedesktop.policykit.exec.allow_gui">true</annotate>
   </action>
   
@@ -24,8 +24,8 @@
     <message>Authentication is required to control fan settings</message>
     <icon_name>fan</icon_name>
     <defaults>
-      <allow_any>auth_admin_keep</allow_any>
-      <allow_inactive>auth_admin_keep</allow_inactive>
+      <allow_any>yes</allow_any>
+      <allow_inactive>yes</allow_inactive>
       <allow_active>yes</allow_active>
     </defaults>
     <annotate key="org.freedesktop.policykit.exec.path">/usr/bin/nbfc</annotate>

@@ -54,15 +54,19 @@ def main():
             except Exception as e:
                 print(f"Error detecting KDE theme: {e}")
 
-        # Another approach for dark mode detection
+        # Another approach for dark mode detection (PyQt6)
         if not is_dark_mode:
             try:
-                from PyQt5.QtGui import QPalette
+                from PyQt6.QtGui import QPalette
 
                 app_palette = app.palette()
                 # If text is lighter than background, we're likely in dark mode
-                bg_color = app_palette.color(QPalette.Window).lightness()
-                text_color = app_palette.color(QPalette.WindowText).lightness()
+                bg_color = app_palette.color(
+                    QPalette.ColorGroup.Active, QPalette.ColorRole.Window
+                ).lightness()
+                text_color = app_palette.color(
+                    QPalette.ColorGroup.Active, QPalette.ColorRole.WindowText
+                ).lightness()
                 is_dark_mode = text_color > bg_color
             except Exception as e:
                 print(f"Error using palette for theme detection: {e}")

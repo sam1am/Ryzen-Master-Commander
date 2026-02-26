@@ -6,7 +6,7 @@ shift
 
 case "$command" in
   "ryzenadj")
-    pkexec /usr/bin/ryzenadj "$@"
+    pkexec /snap/bin/ryzenadj "$@"
     ;;
   "nbfc")
     pkexec /usr/bin/nbfc "$@"
