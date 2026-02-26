@@ -126,6 +126,14 @@ class MainWindow(QMainWindow):
         self.toggle_auto_action = toggle_auto_action
 
         tray_menu.addSeparator()
+        tdp_15_action = QAction("15W", self)
+        tdp_15_action.triggered.connect(lambda: self.profile_manager.apply_preset_tdp(15))
+        tray_menu.addAction(tdp_15_action)
+        tdp_25_action = QAction("25W", self)
+        tdp_25_action.triggered.connect(lambda: self.profile_manager.apply_preset_tdp(25))
+        tray_menu.addAction(tdp_25_action)
+
+        tray_menu.addSeparator()
 
         quit_action = QAction("Quit", self)
         quit_action.triggered.connect(self.quit_application)

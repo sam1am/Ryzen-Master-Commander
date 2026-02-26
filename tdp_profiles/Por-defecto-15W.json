@@ -1,0 +1,10 @@
+{
+  "name": "Por defecto (15W)",
+  "fast-limit": 15,
+  "slow-limit": 15,
+  "slow-time": 60,
+  "tctl-temp": 70,
+  "apu-skin-temp": 50,
+  "max-performance": false,
+  "power-saving": false
+}

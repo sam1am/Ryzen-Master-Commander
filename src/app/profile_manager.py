@@ -81,6 +81,18 @@ class ProfileManager:
         
         # Add the power controls to the main layout
         layout.addLayout(power_controls_layout)
+
+        # Preset TDP buttons (15W and 25W)
+        preset_buttons_layout = QHBoxLayout()
+        btn_15w = QPushButton("15W")
+        btn_15w.setToolTip("Aplica 15W (boost y sostenido). Tctl 70°C.")
+        btn_15w.clicked.connect(lambda: self.apply_preset_tdp(15))
+        btn_25w = QPushButton("25W")
+        btn_25w.setToolTip("Aplica 25W (boost y sostenido). Tctl 70°C.")
+        btn_25w.clicked.connect(lambda: self.apply_preset_tdp(25))
+        preset_buttons_layout.addWidget(btn_15w)
+        preset_buttons_layout.addWidget(btn_25w)
+        layout.addLayout(preset_buttons_layout)
         
         # Collapsible Advanced Settings Section
         self.advanced_container = QWidget()
@@ -212,9 +224,7 @@ class ProfileManager:
         # Populate profile dropdown
         self.update_profile_dropdown()
 
-        # Restore saved TDP settings after widgets are created
-        from PyQt6.QtCore import QTimer
-        QTimer.singleShot(500, self.restore_tdp_settings)
+        # No auto-apply on startup: TDP is applied only when the user selects a profile or clicks 15W/25W
 
     def toggle_advanced_section(self):
         """Toggle visibility of advanced settings section"""
@@ -233,6 +243,29 @@ class ProfileManager:
         else:
             self.profile_content.show()
             self.profile_toggle_btn.setText("▼ Profile Management")
+
+    def apply_preset_tdp(self, watts):
+        """Apply a preset TDP (15 or 25W) with tctl-temp 70°C. 25W uses --max-performance."""
+        use_max_performance = watts == 25
+        profile = {
+            "name": f"Preset {watts}W",
+            "fast-limit": watts,
+            "slow-limit": watts,
+            "slow-time": 60,
+            "tctl-temp": 70,
+            "apu-skin-temp": 50,
+            "max-performance": use_max_performance,
+            "power-saving": False,
+        }
+        self.fast_limit_entry.setText(str(watts))
+        self.slow_limit_entry.setText(str(watts))
+        self.slow_time_entry.setText("60")
+        self.tctl_temp_entry.setText("70")
+        self.apu_skin_temp_entry.setText("50")
+        self.max_performance_var.setChecked(use_max_performance)
+        self.power_saving_var.setChecked(False)
+        apply_tdp_settings(profile, parent=self.parent)
+        self.save_tdp_settings(profile)
 
     def auto_apply_basic_settings(self):
         """Auto-apply basic settings when values change"""
@@ -356,32 +389,19 @@ class ProfileManager:
         return profiles  # Return the loaded profiles
 
     def update_profile_dropdown(self):
-        if self.cached_profiles:
+        if self.cached_profiles is not None:
             self.profile_dropdown.clear()
+            self.profile_dropdown.addItem("— No aplicar —")
             for profile in self.cached_profiles:
                 self.profile_dropdown.addItem(profile["name"])
+            self.profile_dropdown.setCurrentIndex(0)
 
-            # Select first profile by default if none is selected
-            if (
-                self.profile_dropdown.currentIndex() == -1
-                and self.profile_dropdown.count() > 0
-            ):
-                self.profile_dropdown.setCurrentIndex(0)
-
-    # Fixed method to properly handle the signal
     def on_profile_select(self, index):
-        """Handle profile selection from dropdown"""
-        if (
-            index < 0
-            or not self.cached_profiles
-            or index >= len(self.cached_profiles)
-        ):
+        """Handle profile selection from dropdown. Index 0 = no aplicar."""
+        if index <= 0 or not self.cached_profiles or index > len(self.cached_profiles):
             return
-
-        selected_profile = self.cached_profiles[index]
+        selected_profile = self.cached_profiles[index - 1]
         self.current_profile = selected_profile
-
-        # Update the entries with profile values
         self.fast_limit_entry.setText(str(self.current_profile["fast-limit"]))
         self.slow_limit_entry.setText(str(self.current_profile["slow-limit"]))
         self.slow_time_entry.setText(str(self.current_profile["slow-time"]))
@@ -393,11 +413,7 @@ class ProfileManager:
             self.current_profile["max-performance"]
         )
         self.power_saving_var.setChecked(self.current_profile["power-saving"])
-
-        # Apply the profile
         apply_tdp_settings(self.current_profile, parent=self.parent)
-
-        # Save basic settings for auto-restore
         self.save_tdp_settings(self.current_profile)
 
     def save_profile(self):

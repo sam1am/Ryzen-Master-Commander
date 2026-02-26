@@ -42,7 +42,9 @@ class NBFCManager:
         try:
             # First check if the service can start
             result = subprocess.run(
-                ["sudo", "nbfc", "start"], capture_output=True, text=True
+                ["bin/ryzen-master-commander-helper", "nbfc", "start"],
+                capture_output=True,
+                text=True,
             )
             # If there's an error about missing config file, it's not configured
             return (
@@ -63,11 +65,16 @@ class NBFCManager:
         """
         process = QProcess(parent)
 
-        def on_finished(exit_code, exit_status):
+        def on_finished(
+            exit_code,
+            exit_status,
+            callback_fn=callback,
+            process_obj=process,
+        ):
             success = exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit
-            if callback:
-                callback(success)
-            process.deleteLater()
+            if callback_fn:
+                callback_fn(success)
+            process_obj.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "update"])
@@ -137,12 +144,23 @@ class NBFCManager:
         """
         process = QProcess(parent)
 
-        def on_finished(exit_code, exit_status):
-            stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
-            success = exit_code == 0 and exit_status == QProcess.ExitStatus.NormalExit and "ERROR" not in stderr
-            if callback:
-                callback(success)
-            process.deleteLater()
+        def on_finished(
+            exit_code,
+            exit_status,
+            callback_fn=callback,
+            process_obj=process,
+        ):
+            stderr = process_obj.readAllStandardError().data().decode(
+                "utf-8", errors="ignore"
+            )
+            success = (
+                exit_code == 0
+                and exit_status == QProcess.ExitStatus.NormalExit
+                and "ERROR" not in stderr
+            )
+            if callback_fn:
+                callback_fn(success)
+            process_obj.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "config", "-s", config_name])
@@ -159,12 +177,17 @@ class NBFCManager:
         """
         process = QProcess(parent)
 
-        def on_finished(exit_code, exit_status):
+        def on_finished(
+            exit_code,
+            exit_status,
+            callback_fn=callback,
+            process_obj=process,
+        ):
             # Check if service is actually running after the command
             success = NBFCManager.is_nbfc_running()
-            if callback:
-                callback(success)
-            process.deleteLater()
+            if callback_fn:
+                callback_fn(success)
+            process_obj.deleteLater()
 
         process.finished.connect(on_finished)
         process.start("pkexec", ["nbfc", "start"])

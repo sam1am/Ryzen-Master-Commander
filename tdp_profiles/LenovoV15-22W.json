@@ -1,0 +1,10 @@
+{
+  "name": "LenovoV15-22W",
+  "fast-limit": 22,
+  "slow-limit": 22,
+  "slow-time": 60,
+  "tctl-temp": 70,
+  "apu-skin-temp": 50,
+  "max-performance": true,
+  "power-saving": false
+}
