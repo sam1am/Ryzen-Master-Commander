@@ -53,8 +53,11 @@ class MainWindow(QMainWindow):
         # Set up system tray
         self.setup_system_tray()
 
-        # Set auto control by default
-        self.radio_auto_control.setChecked(True)
+        # Set auto control by default only if nbfc is running; otherwise manual to avoid errors
+        if self.check_nbfc_running():
+            self.radio_auto_control.setChecked(True)
+        else:
+            self.radio_manual_control.setChecked(True)
         self.update_fan_control_visibility()
 
         # Start reading system values
@@ -71,9 +74,8 @@ class MainWindow(QMainWindow):
             result = subprocess.run(
                 ["nbfc", "status"], capture_output=True, text=True
             )
-            return "ERROR: connect()" not in result.stderr
+            return "ERROR: connect()" not in (result.stderr or "")
         except Exception:
-            print(f"nbfc not running: {result.stderr}")
             return False
 
     def start_nbfc_service(self):
@@ -439,7 +441,6 @@ class MainWindow(QMainWindow):
 
     def set_auto_control(self):
         if self.radio_auto_control.isChecked():
-            # Create QProcess for non-blocking execution
             process = QProcess(self)
 
             def on_finished(exit_code, exit_status):
@@ -447,11 +448,13 @@ class MainWindow(QMainWindow):
                     print("Auto fan control enabled")
                 else:
                     stderr = process.readAllStandardError().data().decode('utf-8', errors='ignore')
-                    error_msg = f"Error setting automatic fan control (exit code: {exit_code})"
-                    if stderr:
-                        error_msg += f": {stderr}"
-                    print(error_msg)
-                # Remove from active processes list
+                    if not getattr(self, "_auto_fan_error_shown", False):
+                        self._auto_fan_error_shown = True
+                        msg = "Automatic fan control unavailable (NBFC service not running or not configured)."
+                        if stderr and "Service not running" in stderr:
+                            print(msg)
+                        else:
+                            print(f"{msg} {stderr.strip() or exit_code}")
                 if process in self.active_processes:
                     self.active_processes.remove(process)
 

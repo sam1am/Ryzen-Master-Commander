@@ -216,17 +216,22 @@ class NBFCManager:
             return True
 
         print("NBFC service failed to start, checking configuration...")
-        # If still not running, update configs silently
-        NBFCManager.update_nbfc_configs()
+        # If still not running, update configs silently (async; list may already be from package)
+        NBFCManager.update_nbfc_configs(parent=parent)
 
         # Try to get and apply recommended config automatically
         recommended = NBFCManager.get_recommended_config()
 
         if recommended:
-            # Apply recommended config silently
-            if NBFCManager.set_nbfc_config(recommended):
-                print(f"Applied recommended config: {recommended}")
-                return NBFCManager.start_nbfc_service()
+            def on_recommended_set(success):
+                if success:
+                    print(f"Applied recommended config: {recommended}. Starting service...")
+                    NBFCManager.start_nbfc_service(parent=parent)
+                else:
+                    print("Failed to apply recommended config.")
+
+            NBFCManager.set_nbfc_config(recommended, parent=parent, callback=on_recommended_set)
+            return True
 
         # Only show dialog if we couldn't find or apply a recommended config
         print(
@@ -237,8 +242,23 @@ class NBFCManager:
             config_dialog.exec() == QDialog.DialogCode.Accepted
             and config_dialog.selected_config
         ):
-            if NBFCManager.set_nbfc_config(config_dialog.selected_config):
-                return NBFCManager.start_nbfc_service()
+            config_name = config_dialog.selected_config
+            # Chain async: set config first, then start service when config is done
+            def on_config_set(success):
+                if success:
+                    print(f"Config '{config_name}' applied. Starting NBFC service...")
+                    NBFCManager.start_nbfc_service(parent=parent, callback=on_service_started)
+                else:
+                    print(f"Failed to apply config '{config_name}'.")
+
+            def on_service_started(success):
+                if success:
+                    print("NBFC service is running.")
+                else:
+                    print("NBFC service failed to start. Try running: sudo nbfc start")
+
+            NBFCManager.set_nbfc_config(config_name, parent=parent, callback=on_config_set)
+            return True  # We started the async chain; service may come up shortly
 
         return False
 

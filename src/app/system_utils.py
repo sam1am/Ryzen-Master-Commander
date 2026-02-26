@@ -3,19 +3,26 @@ import re
 import os
 from PyQt6.QtCore import QProcess
 
+# Only warn once per session to avoid spamming when nbfc/sensors are missing
+_nbfc_warned = False
+_sensors_warned = False
+
 
 def get_system_readings():
+    global _nbfc_warned, _sensors_warned
     # Get temperature and fan speed from NBFC
     try:
         output = subprocess.check_output(["nbfc", "status", "-a"], text=True)
-    except subprocess.CalledProcessError as e:
-        print(f"Failed to execute 'nbfc status -a': {e}")
+    except subprocess.CalledProcessError:
         temp, fan_speed, profile = "n/a", "n/a", "n/a"
+        if not _nbfc_warned:
+            _nbfc_warned = True
+            print("NBFC service not running. Start it or select a config in the app (e.g. Lenovo ThinkPad T14 Gen2).")
     except FileNotFoundError:
-        print(
-            "nbfc command not found. Make sure NoteBook FanControl is installed."
-        )
         temp, fan_speed, profile = "n/a", "n/a", "n/a"
+        if not _nbfc_warned:
+            _nbfc_warned = True
+            print("nbfc not found. Install it for fan control (the installer can do this).")
     else:
         temperature_match = re.search(r"Temperature\s+:\s+(\d+\.?\d*)", output)
         fan_speed_match = re.search(r"Current Fan Speed\s+:\s+(\d+\.?\d*)", output)
@@ -28,16 +35,17 @@ def get_system_readings():
         profile = (
             current_profile_match.group(1) if current_profile_match else "n/a"
         )
-    
-    # Get power consumption data using sensors
+
+    # Get power consumption data using sensors (lm-sensors)
     try:
         sensors_output = subprocess.check_output(["sensors"], text=True)
         power_match = re.search(r"power1:\s+(\d+\.\d+)\s*W", sensors_output)
         power = power_match.group(1) if power_match else "n/a"
-    except (subprocess.CalledProcessError, FileNotFoundError) as e:
-        print(f"Failed to get power data: {e}")
+    except (subprocess.CalledProcessError, FileNotFoundError):
         power = "n/a"
-    
+        if not _sensors_warned:
+            _sensors_warned = True
+            print("Power data unavailable (install lm-sensors and run 'sensors-detect' for optional power readout).")
     return temp, fan_speed, profile, power
 
 
