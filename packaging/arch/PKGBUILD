@@ -10,10 +10,10 @@ arch=('any')
 url="https://github.com/sam1am/$_realname"
 license=('MIT')
 depends=('python-pyqt6' 'python-pyqtgraph' 'python-numpy' 'python-pillow' 'python-pystray' 'ryzenadj' 'nbfc-linux-git')
-makedepends=('python-setuptools' 'python-build' 'python-installer' 'python-wheel')
-source=("$pkgname-$pkgver.tar.gz")
+makedepends=('python-setuptools' 'python-build' 'python-installer' 'python-wheel' 'python-colorama')
+source=("$pkgname-$pkgver.tar.gz::https://github.com/sam1am/$_realname/archive/refs/tags/v$pkgver.tar.gz")
 noextract=("$pkgname-$pkgver.tar.gz")
-md5sums=('SKIP')
+sha256sums=('9cd333fc930d749da9dc51b1b398e4f384e3456325ff27785c838eecf5bcd875')
 
 build() {
   # Extract the archive

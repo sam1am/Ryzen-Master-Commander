@@ -6,34 +6,35 @@ from PyQt6.QtWidgets import (
     QLabel,
     QSlider,
     QPushButton,
+    QCheckBox,
 )
 from PyQt6.QtCore import Qt
 
 
 class SettingsDialog(QDialog):
-    def __init__(self, parent=None, current_refresh_interval=5):
+    def __init__(self, parent=None, current_refresh_interval=5, start_minimized=False):
         super().__init__(parent)
-        
+
         self.setWindowTitle("Settings")
-        self.resize(400, 250)
-        
+        self.resize(400, 300)
+
         # Main layout
         layout = QVBoxLayout(self)
-        
+
         # Refresh interval group
         refresh_group = QGroupBox("System Monitoring")
         refresh_layout = QVBoxLayout(refresh_group)
-        
+
         refresh_label = QLabel("Refresh Interval (seconds):")
         refresh_layout.addWidget(refresh_label)
-        
+
         self.refresh_slider = QSlider(Qt.Orientation.Horizontal)
         self.refresh_slider.setRange(1, 30)
         self.refresh_slider.setValue(current_refresh_interval)
         self.refresh_slider.setTickPosition(QSlider.TickPosition.TicksBelow)
         self.refresh_slider.setTickInterval(5)
         refresh_layout.addWidget(self.refresh_slider)
-        
+
         # Value labels below slider
         slider_labels = QHBoxLayout()
         slider_labels.addWidget(QLabel("1"))
@@ -43,25 +44,36 @@ class SettingsDialog(QDialog):
         slider_labels.addStretch()
         slider_labels.addWidget(QLabel("30"))
         refresh_layout.addLayout(slider_labels)
-        
+
         # Update label when slider moves
         self.refresh_slider.valueChanged.connect(
             lambda value: self.slider_value_label.setText(str(value))
         )
-        
+
         layout.addWidget(refresh_group)
-        
+
+        # Startup group
+        startup_group = QGroupBox("Startup")
+        startup_layout = QVBoxLayout(startup_group)
+        self.minimize_to_tray_checkbox = QCheckBox("Start minimized to tray")
+        self.minimize_to_tray_checkbox.setChecked(start_minimized)
+        startup_layout.addWidget(self.minimize_to_tray_checkbox)
+        layout.addWidget(startup_group)
+
         # Buttons
         button_layout = QHBoxLayout()
         save_button = QPushButton("Save")
         save_button.clicked.connect(self.accept)
         button_layout.addWidget(save_button)
-        
+
         cancel_button = QPushButton("Cancel")
         cancel_button.clicked.connect(self.reject)
         button_layout.addWidget(cancel_button)
-        
+
         layout.addLayout(button_layout)
-        
+
     def get_refresh_interval(self):
         return self.refresh_slider.value()
+
+    def get_start_minimized(self):
+        return self.minimize_to_tray_checkbox.isChecked()

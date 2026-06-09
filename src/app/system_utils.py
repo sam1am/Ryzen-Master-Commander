@@ -32,7 +32,7 @@ def get_system_readings():
     # Get power consumption data using sensors
     try:
         sensors_output = subprocess.check_output(["sensors"], text=True)
-        power_match = re.search(r"power1:\s+(\d+\.\d+)\s*W", sensors_output)
+        power_match = re.search(r"PPT:\s+(\d+\.?\d*)\s*W", sensors_output)
         power = power_match.group(1) if power_match else "n/a"
     except (subprocess.CalledProcessError, FileNotFoundError) as e:
         print(f"Failed to get power data: {e}")

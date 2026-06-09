@@ -81,7 +81,8 @@ def main():
 
     # Create and show the main window
     main_window = MainWindow()
-    main_window.show()
+    if not main_window.start_minimized:
+        main_window.show()
 
     # Start the application
     sys.exit(app.exec())

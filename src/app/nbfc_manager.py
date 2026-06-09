@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QPushButton,
     QLabel,
 )
-from PyQt6.QtCore import QProcess
+from PyQt6.QtCore import QProcess, QSettings
 
 
 class NBFCManager:
@@ -172,6 +172,14 @@ class NBFCManager:
         return None
 
     @staticmethod
+    def _save_config_choice(config_name):
+        """Persist the chosen NBFC config name for next startup."""
+        settings = QSettings("MerryThieves", "RyzenMasterCommander")
+        settings.setValue("nbfc/last_config", config_name)
+        settings.sync()
+        print(f"Saved NBFC config choice: {config_name}")
+
+    @staticmethod
     def setup_nbfc(parent=None):
         """Complete NBFC setup process with minimal user interaction"""
         if not NBFCManager.is_nbfc_installed():
@@ -188,34 +196,46 @@ class NBFCManager:
             return True
         print("NBFC is not running, attempting to start it...")
 
-        # Try to start the service first
-        if NBFCManager.start_nbfc_service(parent):
+        # Try to start the service first (it may just need restarting)
+        NBFCManager.start_nbfc_service(parent)
+
+        # Check for a config saved from a previous session
+        settings = QSettings("MerryThieves", "RyzenMasterCommander")
+        last_config = settings.value("nbfc/last_config")
+        if last_config:
+            print(f"Applying saved NBFC config from last session: {last_config}")
+            NBFCManager.set_nbfc_config(
+                last_config, parent,
+                callback=lambda ok: NBFCManager.start_nbfc_service(parent) if ok else None,
+            )
             return True
 
-        print("NBFC service failed to start, checking configuration...")
-        # If still not running, update configs silently
-        NBFCManager.update_nbfc_configs()
+        print("No saved NBFC config, checking for recommended config...")
+        NBFCManager.update_nbfc_configs(parent)
 
-        # Try to get and apply recommended config automatically
         recommended = NBFCManager.get_recommended_config()
-
         if recommended:
-            # Apply recommended config silently
-            if NBFCManager.set_nbfc_config(recommended):
-                print(f"Applied recommended config: {recommended}")
-                return NBFCManager.start_nbfc_service()
+            print(f"Applying recommended NBFC config: {recommended}")
+            NBFCManager._save_config_choice(recommended)
+            NBFCManager.set_nbfc_config(
+                recommended, parent,
+                callback=lambda ok: NBFCManager.start_nbfc_service(parent) if ok else None,
+            )
+            return True
 
-        # Only show dialog if we couldn't find or apply a recommended config
-        print(
-            "No recommended config found or failed to apply, showing selection dialog..."
-        )
+        print("No recommended config found, showing selection dialog...")
         config_dialog = ConfigSelectionDialog(parent)
         if (
             config_dialog.exec() == QDialog.DialogCode.Accepted
             and config_dialog.selected_config
         ):
-            if NBFCManager.set_nbfc_config(config_dialog.selected_config):
-                return NBFCManager.start_nbfc_service()
+            selected = config_dialog.selected_config
+            NBFCManager._save_config_choice(selected)
+            NBFCManager.set_nbfc_config(
+                selected, parent,
+                callback=lambda ok: NBFCManager.start_nbfc_service(parent) if ok else None,
+            )
+            return True
 
         return False
 

@@ -239,26 +239,42 @@ class ProfileManager:
         # Only auto-apply if advanced settings are hidden
         if not self.advanced_content.isVisible():
             try:
-                # Create basic profile with just the essential settings
-                basic_profile = {
-                    "fast-limit": int(self.fast_limit_entry.text()),
-                    "slow-limit": int(self.slow_limit_entry.text()),
-                }
+                fast = int(self.fast_limit_entry.text())
+                slow = int(self.slow_limit_entry.text())
+                ProfileManager._validate_power_values(fast, slow)
+                basic_profile = {"fast-limit": fast, "slow-limit": slow}
                 apply_tdp_settings(basic_profile, parent=self.parent)
                 print("Auto-applied basic TDP settings")
-
-                # Save settings for auto-restore on next startup
                 self.save_tdp_settings(basic_profile)
-            except (ValueError, TypeError) as e:
+            except ValueError as e:
+                print(f"Invalid power values, not applying: {e}")
+            except TypeError as e:
                 print(f"Error auto-applying settings: {e}")
+
+    @staticmethod
+    def _validate_power_values(fast_limit, slow_limit):
+        """Raise ValueError if power values fail sanity checks."""
+        if fast_limit < 1:
+            raise ValueError(f"Boost power must be at least 1 W (got {fast_limit})")
+        if slow_limit < 1:
+            raise ValueError(f"Avg power must be at least 1 W (got {slow_limit})")
+        if fast_limit < slow_limit:
+            raise ValueError(
+                f"Boost power ({fast_limit} W) must not be less than avg power ({slow_limit} W)"
+            )
 
     def save_tdp_settings(self, profile):
         """Save TDP settings to persistent storage"""
         try:
-            self.settings.setValue("tdp/fast_limit", profile.get("fast-limit"))
-            self.settings.setValue("tdp/slow_limit", profile.get("slow-limit"))
+            fast = profile.get("fast-limit")
+            slow = profile.get("slow-limit")
+            ProfileManager._validate_power_values(fast, slow)
+            self.settings.setValue("tdp/fast_limit", fast)
+            self.settings.setValue("tdp/slow_limit", slow)
             self.settings.sync()
-            print(f"Saved TDP settings: Fast={profile.get('fast-limit')}W, Slow={profile.get('slow-limit')}W")
+            print(f"Saved TDP settings: Fast={fast}W, Slow={slow}W")
+        except ValueError as e:
+            print(f"Refusing to save invalid TDP settings: {e}")
         except Exception as e:
             print(f"Error saving TDP settings: {e}")
 
@@ -268,22 +284,22 @@ class ProfileManager:
             fast_limit = self.settings.value("tdp/fast_limit", type=int)
             slow_limit = self.settings.value("tdp/slow_limit", type=int)
 
-            if fast_limit and slow_limit:
-                # Update UI fields
-                self.fast_limit_entry.setText(str(fast_limit))
-                self.slow_limit_entry.setText(str(slow_limit))
-
-                # Apply the settings
-                basic_profile = {
-                    "fast-limit": fast_limit,
-                    "slow-limit": slow_limit,
-                }
-                apply_tdp_settings(basic_profile, parent=self.parent)
-                print(f"Restored and applied TDP settings: Fast={fast_limit}W, Slow={slow_limit}W")
-                return True
-            else:
+            if not fast_limit or not slow_limit:
                 print("No saved TDP settings found")
                 return False
+
+            ProfileManager._validate_power_values(fast_limit, slow_limit)
+
+            self.fast_limit_entry.setText(str(fast_limit))
+            self.slow_limit_entry.setText(str(slow_limit))
+
+            basic_profile = {"fast-limit": fast_limit, "slow-limit": slow_limit}
+            apply_tdp_settings(basic_profile, parent=self.parent)
+            print(f"Restored and applied TDP settings: Fast={fast_limit}W, Slow={slow_limit}W")
+            return True
+        except ValueError as e:
+            print(f"Saved TDP settings failed sanity check, ignoring: {e}")
+            return False
         except Exception as e:
             print(f"Error restoring TDP settings: {e}")
             return False
@@ -357,6 +373,7 @@ class ProfileManager:
 
     def update_profile_dropdown(self):
         if self.cached_profiles:
+            self.profile_dropdown.blockSignals(True)
             self.profile_dropdown.clear()
             for profile in self.cached_profiles:
                 self.profile_dropdown.addItem(profile["name"])
@@ -367,6 +384,7 @@ class ProfileManager:
                 and self.profile_dropdown.count() > 0
             ):
                 self.profile_dropdown.setCurrentIndex(0)
+            self.profile_dropdown.blockSignals(False)
 
     # Fixed method to properly handle the signal
     def on_profile_select(self, index):

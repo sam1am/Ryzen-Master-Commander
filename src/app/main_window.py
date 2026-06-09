@@ -18,7 +18,7 @@ from PyQt6.QtWidgets import (
     QMenu,
     QMessageBox,
 )
-from PyQt6.QtCore import Qt, QTimer, QProcess
+from PyQt6.QtCore import Qt, QTimer, QProcess, QSettings
 from PyQt6.QtGui import QIcon, QAction
 
 from src.app.graphs import CombinedGraph
@@ -42,8 +42,13 @@ class MainWindow(QMainWindow):
         # Store QProcess references to prevent garbage collection
         self.active_processes = []
 
+        self._settings = QSettings("MerryThieves", "RyzenMasterCommander")
+
         # Default refresh interval is 5 seconds
         self.refresh_interval = 5
+        self.start_minimized = self._settings.value(
+            "startup/minimize_to_tray", False, type=bool
+        )
 
         NBFCManager.setup_nbfc(self)
 
@@ -244,9 +249,13 @@ class MainWindow(QMainWindow):
         fan_group = QGroupBox("Fan Controls")
         fan_layout = QVBoxLayout(fan_group)
         
-        # Add fan speed gauge at the top
+        # Add fan speed gauge and temperature gauge side by side at the top
+        gauges_layout = QHBoxLayout()
         self.fan_gauge = CircularGauge(title="Fan %")
-        fan_layout.addWidget(self.fan_gauge, alignment=Qt.AlignmentFlag.AlignCenter)
+        gauges_layout.addWidget(self.fan_gauge)
+        self.temp_gauge = CircularGauge(title="°C", max_value=100)
+        gauges_layout.addWidget(self.temp_gauge)
+        fan_layout.addLayout(gauges_layout)
 
         # Fan profile editor button
         fan_profile_editor_btn = QPushButton("Fan Profile Editor")
@@ -353,6 +362,12 @@ class MainWindow(QMainWindow):
                 self.fan_gauge.set_value(float(fan_speed))
             except (ValueError, TypeError):
                 print(f"Could not convert fan speed to float: {fan_speed}")
+
+        if temperature != "n/a":
+            try:
+                self.temp_gauge.set_value(float(temperature))
+            except (ValueError, TypeError):
+                print(f"Could not convert temperature to float: {temperature}")
         
         if power != "n/a":
             try:
@@ -382,11 +397,13 @@ class MainWindow(QMainWindow):
 
     def open_settings(self):
         """Open the settings dialog"""
-        dialog = SettingsDialog(self, self.refresh_interval)
+        dialog = SettingsDialog(self, self.refresh_interval, self.start_minimized)
         if dialog.exec():
             self.refresh_interval = dialog.get_refresh_interval()
             self.refresh_timer.setInterval(self.refresh_interval * 1000)
-            print(f"Updated refresh interval to {self.refresh_interval} seconds")
+            self.start_minimized = dialog.get_start_minimized()
+            self._settings.setValue("startup/minimize_to_tray", self.start_minimized)
+            self._settings.sync()
 
     def delayed_fan_setting(self):
         # Cancel previous timer if it exists
